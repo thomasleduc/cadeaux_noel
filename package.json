@@ -1,0 +1,17 @@
+{
+  "name": "cadeaux_noel",
+  "version": "0.0.9",
+  "description": "Assign a gift for Xmas.",
+  "main": "index.js",
+  "author": "Thomas LEDUC",
+  "license": "MIT",
+  "devDependencies": {
+    "prettier": "1.14.3"
+  },
+  "dependencies": {
+    "config": "^2.0.1",
+    "dotenv": "^6.1.0",
+    "form-data": "^2.3.3",
+    "node-fetch": "^2.2.0"
+  }
+}
