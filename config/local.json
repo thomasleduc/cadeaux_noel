@@ -1,0 +1,69 @@
+{
+  "phones": [
+      {
+        "id": "tho",
+        "number": 33672650394,
+        "name": "Thomas Leduc"
+      },
+      {
+        "id": "lor",
+        "number": 33683967933,
+        "name": "Lorene"
+      },
+      {
+        "id" : "car",
+        "number" :33681270397,
+        "name": "Caro"
+      },
+      {
+        "id" : "the",
+        "number" :353851906208,
+        "name": "Theo"
+      },
+      {
+        "id" : "mag",
+        "number" :33676395204,
+        "name": "Margaux"
+      },
+      { "id" : "ale",
+        "number" :33647879638,
+        "name": "Pinou"
+      },
+      {
+        "id" : "man",
+        "number" :33648726352,
+        "name": "Manue"
+      },
+      {
+        "id" : "rom",
+        "number" :33670601761,
+        "name": "Romain"
+      },
+      {
+        "id" : "leb",
+        "number" :33674010063,
+        "name": "Thomas Lebihan"
+      },
+      {
+        "id" : "bar",
+        "number" :33689994896,
+        "name": "Barbara"
+      },
+      {
+        "id" : "mar",
+        "number" :33688644530,
+        "name": "Marioule"
+      },
+      {
+        "id" : "val",
+        "number" :33647164775,
+        "name": "Valou"
+      }
+  ],
+  "notCompatibles": [
+    ["tho", "lor"],
+    ["mag", "ale"],
+    ["rom", "man"],
+    ["leb", "bar"]
+  ]
+}
