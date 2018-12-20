@@ -18,7 +18,7 @@ module.exports = (participants, notCompatibles) => {
 
   // pick randomly a person but not in exceptedValues
   const pickRandomlyWithException = (particips, exceptedValues) => {
-    const arrWithoutExceptions = particips.filter(({id}) => !exceptedValues.includes(id));
+    const arrWithoutExceptions = particips.filter(({ id }) => !exceptedValues.includes(id));
     return pickRandomly(arrWithoutExceptions);
   };
 
@@ -33,7 +33,7 @@ module.exports = (participants, notCompatibles) => {
     const receiver = pickRandomlyWithException(receivers, [...toExclude(giver.id), giver.id]);
 
     // remove receiver from the left receivers
-    receivers = receivers.filter(({id}) => id !== receiver.id);
+    receivers = receivers.filter(({ id }) => id !== receiver.id);
 
     // return the couple giver(object)/receiver(object)
     return { giver, receiver };

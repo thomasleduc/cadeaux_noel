@@ -1,12 +1,10 @@
 const fs = require('fs');
 const config = require('config');
 const giftRandomer = require('./gifts');
-const sms = require('./sms');
+const sendSms = require('./sms');
 
 const participants = config.get('phones');
 const notCompatibles = config.get('notCompatibles');
-
-const sendSms = sms(participants);
 
 // sanity check of config : no double id in participants
 if (new Set(participants.map(({ id }) => id)).size !== participants.length) {
@@ -24,4 +22,3 @@ fs.writeFile(
 );
 
 gifts.forEach(({ giver, receiver }) => sendSms(giver, receiver));
-
