@@ -105,6 +105,17 @@ const REMOVE_PERSON_FROM_EVENT = gql`
   }
 `;
 
+const UPDATE_EVENT = gql`
+  mutation UpdateEvent($input: UpdateEventInput!) {
+    updateEvent(input: $input) {
+      id
+      name
+      smsTemplate
+      assistantSmsTemplate
+    }
+  }
+`;
+
 const DEFAULT_SMS_TEMPLATE =
   "Hello {sender}, this is Santa Claus. This year you should give a gift to {receiver}.";
 const DEFAULT_ASSISTANT_TEMPLATE =
@@ -141,6 +152,7 @@ export default function EventsPage() {
   });
   const [addPersonToEventMutation] = useMutation(ADD_PERSON_TO_EVENT);
   const [removePersonFromEventMutation] = useMutation(REMOVE_PERSON_FROM_EVENT);
+  const [updateEventMutation] = useMutation(UPDATE_EVENT);
 
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
@@ -153,6 +165,11 @@ export default function EventsPage() {
     eventId?: string;
     personId?: string;
   }>({ type: null });
+  const [editingTemplate, setEditingTemplate] = useState<{
+    eventId: string;
+    field: "smsTemplate" | "assistantSmsTemplate";
+  } | null>(null);
+  const [editingTemplateValue, setEditingTemplateValue] = useState("");
 
   const resetForm = () => {
     setFormData({
@@ -252,6 +269,46 @@ export default function EventsPage() {
   const getPersonName = (personId: string) => {
     const person = data?.persons?.find((p) => p.id === personId);
     return person ? `${person.firstName} ${person.lastName}` : personId;
+  };
+
+  const startEditingTemplate = (
+    eventId: string,
+    field: "smsTemplate" | "assistantSmsTemplate",
+    currentValue: string
+  ) => {
+    setEditingTemplate({ eventId, field });
+    setEditingTemplateValue(currentValue);
+  };
+
+  const cancelEditingTemplate = () => {
+    setEditingTemplate(null);
+    setEditingTemplateValue("");
+  };
+
+  const saveEditingTemplate = async () => {
+    if (!editingTemplate) return;
+
+    const value = editingTemplateValue.trim();
+    if (value.length === 0) {
+      cancelEditingTemplate();
+      return;
+    }
+
+    try {
+      await updateEventMutation({
+        variables: {
+          input: {
+            id: editingTemplate.eventId,
+            [editingTemplate.field]: value,
+          },
+        },
+      });
+      await refetch();
+      cancelEditingTemplate();
+    } catch (error) {
+      console.error("Failed to update template:", error);
+      cancelEditingTemplate();
+    }
   };
 
   if (loading) return <p>Loading...</p>;
@@ -407,17 +464,123 @@ export default function EventsPage() {
                       <h3 className="text-sm font-medium text-gray-500 mb-2">
                         SMS Template
                       </h3>
-                      <pre className="bg-gray-50 text-gray-800 rounded-md p-3 text-sm whitespace-pre-wrap">
-                        {event.smsTemplate}
-                      </pre>
+                      <div className="relative group">
+                        {editingTemplate?.eventId === event.id &&
+                        editingTemplate?.field === "smsTemplate" ? (
+                          <textarea
+                            value={editingTemplateValue}
+                            onChange={(e) =>
+                              setEditingTemplateValue(e.target.value)
+                            }
+                            onBlur={saveEditingTemplate}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && e.ctrlKey) {
+                                saveEditingTemplate();
+                              } else if (e.key === "Escape") {
+                                cancelEditingTemplate();
+                              }
+                            }}
+                            autoFocus
+                            className="w-full bg-gray-50 text-gray-800 rounded-md p-3 text-sm border-2 border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px]"
+                          />
+                        ) : (
+                          <div className="relative">
+                            <pre className="bg-gray-50 text-gray-800 rounded-md p-3 text-sm whitespace-pre-wrap">
+                              {event.smsTemplate}
+                            </pre>
+                            <button
+                              onClick={() =>
+                                startEditingTemplate(
+                                  event.id,
+                                  "smsTemplate",
+                                  event.smsTemplate
+                                )
+                              }
+                              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded"
+                              title="Edit template"
+                            >
+                              <svg
+                                className="w-4 h-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                />
+                              </svg>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Available placeholders: {"{sender}"}, {"{receiver}"}.
+                        Press Ctrl+Enter to save, Esc to cancel.
+                      </p>
                     </div>
                     <div>
                       <h3 className="text-sm font-medium text-gray-500 mb-2">
                         Assistant SMS Template
                       </h3>
-                      <pre className="bg-gray-50 text-gray-800 rounded-md p-3 text-sm whitespace-pre-wrap">
-                        {event.assistantSmsTemplate}
-                      </pre>
+                      <div className="relative group">
+                        {editingTemplate?.eventId === event.id &&
+                        editingTemplate?.field === "assistantSmsTemplate" ? (
+                          <textarea
+                            value={editingTemplateValue}
+                            onChange={(e) =>
+                              setEditingTemplateValue(e.target.value)
+                            }
+                            onBlur={saveEditingTemplate}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && e.ctrlKey) {
+                                saveEditingTemplate();
+                              } else if (e.key === "Escape") {
+                                cancelEditingTemplate();
+                              }
+                            }}
+                            autoFocus
+                            className="w-full bg-gray-50 text-gray-800 rounded-md p-3 text-sm border-2 border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px]"
+                          />
+                        ) : (
+                          <div className="relative">
+                            <pre className="bg-gray-50 text-gray-800 rounded-md p-3 text-sm whitespace-pre-wrap">
+                              {event.assistantSmsTemplate}
+                            </pre>
+                            <button
+                              onClick={() =>
+                                startEditingTemplate(
+                                  event.id,
+                                  "assistantSmsTemplate",
+                                  event.assistantSmsTemplate
+                                )
+                              }
+                              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded"
+                              title="Edit template"
+                            >
+                              <svg
+                                className="w-4 h-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                />
+                              </svg>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Available placeholders: {"{assistant}"}, {"{sender}"},{" "}
+                        {"{receiver}"}. Press Ctrl+Enter to save, Esc to cancel.
+                      </p>
                     </div>
                   </div>
 
