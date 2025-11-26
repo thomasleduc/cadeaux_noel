@@ -63,6 +63,7 @@ type Mutation {
   createEvent(input: CreateEventInput!): Event!
   createFamily(input: CreateFamilyInput!): Family!
   createPerson(input: CreatePersonInput!): Person!
+  dryRunSms(eventId: ID!): SmsDryRunResult!
   generateDraw(eventId: ID!): Event!
   markEventAsCompleted(eventId: ID!): Event!
   markEventAsReady(eventId: ID!): Event!
@@ -98,6 +99,27 @@ type Query {
   family(id: ID!): Family!
   person(id: ID!): Person!
   persons: [Person!]!
+}
+
+type SmsDryRunMessage {
+  error: String
+  message: String!
+  receiver: String!
+  sender: String!
+  to: String!
+  toName: String!
+  type: String!
+}
+
+type SmsDryRunResult {
+  messages: [SmsDryRunMessage!]!
+  summary: SmsDryRunSummary!
+}
+
+type SmsDryRunSummary {
+  failed: Float!
+  success: Float!
+  total: Float!
 }
 
 input UpdateEventInput {

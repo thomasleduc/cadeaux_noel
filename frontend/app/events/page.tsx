@@ -87,6 +87,27 @@ const MARK_EVENT_AS_COMPLETED = gql`
   }
 `;
 
+const DRY_RUN_SMS = gql`
+  mutation DryRunSms($eventId: ID!) {
+    dryRunSms(eventId: $eventId) {
+      messages {
+        to
+        toName
+        sender
+        receiver
+        message
+        type
+        error
+      }
+      summary {
+        total
+        success
+        failed
+      }
+    }
+  }
+`;
+
 const ADD_PERSON_TO_EVENT = gql`
   mutation AddPersonToEvent($eventId: ID!, $personId: ID!) {
     addPersonToEvent(eventId: $eventId, personId: $personId) {
@@ -167,6 +188,8 @@ export default function EventsPage() {
     },
     onError: () => setActionState({ type: null }),
   });
+
+  const [dryRunSms] = useMutation(DRY_RUN_SMS);
   const [addPersonToEventMutation] = useMutation(ADD_PERSON_TO_EVENT);
   const [removePersonFromEventMutation] = useMutation(REMOVE_PERSON_FROM_EVENT);
   const [updateEventMutation] = useMutation(UPDATE_EVENT);
@@ -178,7 +201,7 @@ export default function EventsPage() {
     assistantSmsTemplate: DEFAULT_ASSISTANT_TEMPLATE,
   });
   const [actionState, setActionState] = useState<{
-    type: "ready" | "generate" | "complete" | "toggle" | null;
+    type: "ready" | "generate" | "complete" | "toggle" | "dryRun" | null;
     eventId?: string;
     personId?: string;
   }>({ type: null });
@@ -187,6 +210,23 @@ export default function EventsPage() {
     field: "smsTemplate" | "assistantSmsTemplate";
   } | null>(null);
   const [editingTemplateValue, setEditingTemplateValue] = useState("");
+  const [dryRunResult, setDryRunResult] = useState<{
+    eventId: string;
+    messages: Array<{
+      to: string;
+      toName: string;
+      sender: string;
+      receiver: string;
+      message: string;
+      type: string;
+      error?: string;
+    }>;
+    summary: {
+      total: number;
+      success: number;
+      failed: number;
+    };
+  } | null>(null);
 
   const resetForm = () => {
     setFormData({
@@ -231,6 +271,25 @@ export default function EventsPage() {
     markAsCompleted({
       variables: { eventId },
     });
+  };
+
+  const handleDryRunSms = async (eventId: string) => {
+    setActionState({ type: "dryRun", eventId });
+    try {
+      const result = await dryRunSms({
+        variables: { eventId },
+      });
+      if (result.data?.dryRunSms) {
+        setDryRunResult({
+          eventId,
+          ...result.data.dryRunSms,
+        });
+      }
+    } catch (error) {
+      console.error("Dry-run SMS failed:", error);
+    } finally {
+      setActionState({ type: null });
+    }
   };
 
   const handleToggleParticipant = async (
@@ -745,7 +804,6 @@ export default function EventsPage() {
                       // Normalize status to lowercase (GraphQL returns uppercase enum values)
                       const rawStatus = event.status || "DRAFT";
                       const currentStatus = typeof rawStatus === "string" ? rawStatus.toLowerCase() : "draft";
-                      console.log("Event status (raw):", rawStatus, "normalized:", currentStatus, "canMarkReady:", canMarkReady, "participants:", event.participants?.length);
                       
                       if (currentStatus === "draft") {
                         return (
@@ -777,6 +835,9 @@ export default function EventsPage() {
                         );
                       }
                       if (currentStatus === "drawn") {
+                        const isDryRunning =
+                          actionState.type === "dryRun" &&
+                          actionState.eventId === event.id;
                         return (
                           <>
                             <button
@@ -785,6 +846,13 @@ export default function EventsPage() {
                               disabled={isGenerating}
                             >
                               {isGenerating ? "Regenerating draw..." : "Regenerate Draw"}
+                            </button>
+                            <button
+                              onClick={() => handleDryRunSms(event.id)}
+                              className="bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 transition-colors disabled:opacity-60"
+                              disabled={isDryRunning}
+                            >
+                              {isDryRunning ? "Running dry-run..." : "Dry-run SMS"}
                             </button>
                             <button
                               onClick={() => handleMarkAsCompleted(event.id)}
@@ -821,6 +889,100 @@ export default function EventsPage() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Dry-run SMS Results Modal */}
+        {dryRunResult && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    Dry-run SMS Results
+                  </h2>
+                  <button
+                    onClick={() => setDryRunResult(null)}
+                    className="text-gray-500 hover:text-gray-700 text-2xl"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-600">Total:</span>{" "}
+                      <span className="font-semibold text-gray-900">
+                        {dryRunResult.summary.total}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Success:</span>{" "}
+                      <span className="font-semibold text-green-600">
+                        {dryRunResult.summary.success}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Failed:</span>{" "}
+                      <span className="font-semibold text-red-600">
+                        {dryRunResult.summary.failed}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {dryRunResult.messages.map((msg, index) => (
+                    <div
+                      key={index}
+                      className={`border rounded-lg p-4 ${
+                        msg.error
+                          ? "border-red-200 bg-red-50"
+                          : "border-gray-200 bg-gray-50"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1">
+                          <div className="text-sm font-medium text-gray-900 mb-1">
+                            To: {msg.toName} ({msg.to})
+                          </div>
+                          <div className="text-xs text-gray-600 mb-2">
+                            Type: {msg.type === "assistant" ? "Assistant SMS" : "Regular SMS"}
+                          </div>
+                          <div className="text-sm text-gray-700 mb-1">
+                            <span className="font-medium">Sender:</span> {msg.sender}
+                          </div>
+                          <div className="text-sm text-gray-700 mb-2">
+                            <span className="font-medium">Receiver:</span> {msg.receiver}
+                          </div>
+                          {msg.error && (
+                            <div className="text-sm text-red-600 font-medium mb-2">
+                              Error: {msg.error}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-gray-200">
+                        <div className="text-xs text-gray-500 mb-1">Message:</div>
+                        <pre className="text-sm text-gray-800 whitespace-pre-wrap bg-white p-2 rounded border">
+                          {msg.message || "(No message - error occurred)"}
+                        </pre>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-6 flex justify-end">
+                  <button
+                    onClick={() => setDryRunResult(null)}
+                    className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
