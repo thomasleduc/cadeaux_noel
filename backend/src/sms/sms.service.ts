@@ -22,7 +22,9 @@ export class SmsService {
   /**
    * Send SMS for all participants in an event
    */
-  async sendEventSms(eventId: string): Promise<{ success: number; failed: number }> {
+  async sendEventSms(
+    eventId: string
+  ): Promise<{ success: number; failed: number }> {
     const event = await this.eventService.findOne(eventId);
     if (!event) {
       throw new Error(`Event with ID ${eventId} not found`);
@@ -33,9 +35,13 @@ export class SmsService {
     }
 
     // Handle old events without status - if they have a drawResult, consider them as DRAWN
-    const currentStatus = event.status || (event.drawResult ? EventStatus.DRAWN : EventStatus.DRAFT);
+    const currentStatus =
+      event.status ||
+      (event.drawResult ? EventStatus.DRAWN : EventStatus.DRAFT);
     if (currentStatus !== EventStatus.DRAWN) {
-      throw new Error(`Event must be in DRAWN status to send SMS. Current status: ${currentStatus}`);
+      throw new Error(
+        `Event must be in DRAWN status to send SMS. Current status: ${currentStatus}`
+      );
     }
 
     const persons = await this.personService.findAll();
@@ -57,7 +63,10 @@ export class SmsService {
         await this.sendSmsToPerson(sender, receiver, event);
         success++;
       } catch (error) {
-        console.error(`Failed to send SMS to ${sender.firstName} ${sender.lastName}:`, error);
+        console.error(
+          `Failed to send SMS to ${sender.firstName} ${sender.lastName}:`,
+          error
+        );
         failed++;
       }
     }
@@ -73,7 +82,11 @@ export class SmsService {
   /**
    * Send SMS to a specific person
    */
-  private async sendSmsToPerson(sender: Person, receiver: Person, event: Event): Promise<void> {
+  private async sendSmsToPerson(
+    sender: Person,
+    receiver: Person,
+    event: Event
+  ): Promise<void> {
     let phoneNumber: string;
     let message: string;
 
@@ -115,7 +128,11 @@ export class SmsService {
 
     // Send SMS via Vonage
     const from = process.env.VONAGE_FROM_NUMBER || "SecretSanta";
-    const response = await this.vonage.sms.send({ to: phoneNumber, from, text: message });
+    const response = await this.vonage.sms.send({
+      to: phoneNumber,
+      from,
+      text: message,
+    });
 
     if (response.messages[0].status !== "0") {
       throw new Error(`SMS failed: ${response.messages[0]["error-text"]}`);
@@ -180,51 +197,58 @@ export class SmsService {
         continue;
       }
 
-        try {
-          let phoneNumber: string;
-          let message: string;
-          let toName: string;
-          let type: "regular" | "assistant";
+      try {
+        let phoneNumber: string;
+        let message: string;
+        let toName: string;
+        let type: "regular" | "assistant";
 
-          // If sender has a phone number, use regular template
-          if (sender.phoneNumber) {
-            phoneNumber = sender.phoneNumber;
-            toName = `${sender.firstName} ${sender.lastName}`;
-            type = "regular";
-            message = this.replaceTemplatePlaceholders(event.smsTemplate, {
-              sender,
-              receiver,
-            });
-          }
-          // If sender has an assistant, use assistant template
-          else if (sender.assistantId) {
-            // Load assistant if not already loaded
-            if (!sender.assistant) {
-              const assistant = await this.personService.findOne(sender.assistantId);
-              if (!assistant) {
-                throw new Error(`Assistant with ID ${sender.assistantId} not found`);
-              }
-              sender.assistant = assistant;
-            }
-
-            phoneNumber = sender.assistant.phoneNumber || "";
-            if (!phoneNumber) {
+        // If sender has a phone number, use regular template
+        if (sender.phoneNumber) {
+          phoneNumber = sender.phoneNumber;
+          toName = `${sender.firstName} ${sender.lastName}`;
+          type = "regular";
+          message = this.replaceTemplatePlaceholders(event.smsTemplate, {
+            sender,
+            receiver,
+          });
+        }
+        // If sender has an assistant, use assistant template
+        else if (sender.assistantId) {
+          // Load assistant if not already loaded
+          if (!sender.assistant) {
+            const assistant = await this.personService.findOne(
+              sender.assistantId
+            );
+            if (!assistant) {
               throw new Error(
-                `Assistant ${sender.assistant.firstName} ${sender.assistant.lastName} has no phone number`
+                `Assistant with ID ${sender.assistantId} not found`
               );
             }
-            toName = `${sender.assistant.firstName} ${sender.assistant.lastName}`;
-            type = "assistant";
-            message = this.replaceTemplatePlaceholders(event.assistantSmsTemplate, {
+            sender.assistant = assistant;
+          }
+
+          phoneNumber = sender.assistant.phoneNumber || "";
+          if (!phoneNumber) {
+            throw new Error(
+              `Assistant ${sender.assistant.firstName} ${sender.assistant.lastName} has no phone number`
+            );
+          }
+          toName = `${sender.assistant.firstName} ${sender.assistant.lastName}`;
+          type = "assistant";
+          message = this.replaceTemplatePlaceholders(
+            event.assistantSmsTemplate,
+            {
               assistant: sender.assistant,
               sender,
               receiver,
-            });
-          } else {
-            throw new Error(
-              `Person ${sender.firstName} ${sender.lastName} has no phone number and no assistant`
-            );
-          }
+            }
+          );
+        } else {
+          throw new Error(
+            `Person ${sender.firstName} ${sender.lastName} has no phone number and no assistant`
+          );
+        }
 
         messages.push({
           to: phoneNumber,
@@ -272,31 +296,34 @@ export class SmsService {
 
     // First, replace object property placeholders like {sender.firstName}, {receiver.slug}
     // Pattern: {objectName.propertyName}
-    message = message.replace(/\{(\w+)\.(\w+)\}/g, (match, objectName, propertyName) => {
-      const obj = values[objectName];
-      if (obj && typeof obj === "object") {
-        const person = obj as Person;
-        // Support firstName, lastName, slug
-        if (propertyName === "firstName") {
-          return person.firstName || "";
+    message = message.replace(
+      /\{(\w+)\.(\w+)\}/g,
+      (match, objectName, propertyName) => {
+        const obj = values[objectName];
+        if (obj && typeof obj === "object") {
+          const person = obj;
+          // Support firstName, lastName, slug
+          if (propertyName === "firstName") {
+            return person.firstName || "";
+          }
+          if (propertyName === "lastName") {
+            return person.lastName || "";
+          }
+          if (propertyName === "slug") {
+            return person.slug || "";
+          }
+          // Fallback: try to access the property directly
+          return (person as any)[propertyName] || match;
         }
-        if (propertyName === "lastName") {
-          return person.lastName || "";
-        }
-        if (propertyName === "slug") {
-          return person.slug || "";
-        }
-        // Fallback: try to access the property directly
-        return (person as any)[propertyName] || match;
+        return match; // Return original if not found
       }
-      return match; // Return original if not found
-    });
+    );
 
     // Then, replace simple placeholders like {sender}, {receiver}, {assistant}
     // These will use the full name as fallback for backward compatibility
     for (const [key, value] of Object.entries(values)) {
       if (typeof value === "object") {
-        const person = value as Person;
+        const person = value;
         // Replace {key} with full name for backward compatibility
         message = message.replace(
           new RegExp(`\\{${key}\\}`, "g"),
@@ -310,4 +337,3 @@ export class SmsService {
     return message;
   }
 }
-

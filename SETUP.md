@@ -40,6 +40,29 @@ Required variables:
 - Database credentials (DB_HOST, DB_PORT, DB_USERNAME, DB_PASSWORD, DB_NAME)
 - Vonage API credentials (VONAGE_API_KEY, VONAGE_API_SECRET, VONAGE_FROM_NUMBER)
 
+#### How to get Vonage API credentials:
+
+1. **Create a Vonage account** (if you don't have one):
+   - Go to https://dashboard.nexmo.com/sign-up
+   - Sign up for a free account
+
+2. **Get your API credentials**:
+   - Log in to the Vonage Dashboard: https://dashboard.nexmo.com/
+   - Go to "Settings" → "API Keys"
+   - You'll see your **API Key** and **API Secret**
+   - Copy these values to your `.env` file
+
+3. **Configure sender number** (optional):
+   - `VONAGE_FROM_NUMBER` can be:
+     - A text name (e.g., "SecretSanta") - works in some countries
+     - A verified phone number from Vonage (recommended for production)
+   - For testing, you can use "SecretSanta" as default
+   - For production, you may need to purchase/verify a number in the Vonage Dashboard
+
+4. **Test your setup**:
+   - Use the dry-run feature in the Events page to test without sending real SMS
+   - Make sure phone numbers are in E.164 format (e.g., +33612345678 for France)
+
 **Frontend:**
 
 ```bash

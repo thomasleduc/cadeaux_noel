@@ -60,9 +60,9 @@ The frontend will be available at `http://localhost:3001`
 - `DB_NAME`: Database name (default: secret_santa)
 - `PORT`: Backend server port (default: 4000)
 - `FRONTEND_URL`: Frontend URL for CORS (default: http://localhost:3001)
-- `VONAGE_API_KEY`: Your Vonage API key
-- `VONAGE_API_SECRET`: Your Vonage API secret
-- `VONAGE_FROM_NUMBER`: Sender name/number for SMS
+- `VONAGE_API_KEY`: Your Vonage API key (get from https://dashboard.nexmo.com/)
+- `VONAGE_API_SECRET`: Your Vonage API secret (get from https://dashboard.nexmo.com/)
+- `VONAGE_FROM_NUMBER`: Sender name/number for SMS (default: "SecretSanta", use verified number for production)
 
 ### Frontend (.env.local)
 
