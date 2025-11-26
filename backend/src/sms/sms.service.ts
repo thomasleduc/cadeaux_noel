@@ -81,8 +81,8 @@ export class SmsService {
     if (sender.phoneNumber) {
       phoneNumber = sender.phoneNumber;
       message = this.replaceTemplatePlaceholders(event.smsTemplate, {
-        sender: `${sender.firstName} ${sender.lastName}`,
-        receiver: `${receiver.firstName} ${receiver.lastName}`,
+        sender,
+        receiver,
       });
     }
     // If sender has an assistant, use assistant template
@@ -103,9 +103,9 @@ export class SmsService {
         );
       }
       message = this.replaceTemplatePlaceholders(event.assistantSmsTemplate, {
-        assistant: `${sender.assistant.firstName} ${sender.assistant.lastName}`,
-        sender: `${sender.firstName} ${sender.lastName}`,
-        receiver: `${receiver.firstName} ${receiver.lastName}`,
+        assistant: sender.assistant,
+        sender,
+        receiver,
       });
     } else {
       throw new Error(
@@ -180,51 +180,51 @@ export class SmsService {
         continue;
       }
 
-      try {
-        let phoneNumber: string;
-        let message: string;
-        let toName: string;
-        let type: "regular" | "assistant";
+        try {
+          let phoneNumber: string;
+          let message: string;
+          let toName: string;
+          let type: "regular" | "assistant";
 
-        // If sender has a phone number, use regular template
-        if (sender.phoneNumber) {
-          phoneNumber = sender.phoneNumber;
-          toName = `${sender.firstName} ${sender.lastName}`;
-          type = "regular";
-          message = this.replaceTemplatePlaceholders(event.smsTemplate, {
-            sender: `${sender.firstName} ${sender.lastName}`,
-            receiver: `${receiver.firstName} ${receiver.lastName}`,
-          });
-        }
-        // If sender has an assistant, use assistant template
-        else if (sender.assistantId) {
-          // Load assistant if not already loaded
-          if (!sender.assistant) {
-            const assistant = await this.personService.findOne(sender.assistantId);
-            if (!assistant) {
-              throw new Error(`Assistant with ID ${sender.assistantId} not found`);
-            }
-            sender.assistant = assistant;
+          // If sender has a phone number, use regular template
+          if (sender.phoneNumber) {
+            phoneNumber = sender.phoneNumber;
+            toName = `${sender.firstName} ${sender.lastName}`;
+            type = "regular";
+            message = this.replaceTemplatePlaceholders(event.smsTemplate, {
+              sender,
+              receiver,
+            });
           }
+          // If sender has an assistant, use assistant template
+          else if (sender.assistantId) {
+            // Load assistant if not already loaded
+            if (!sender.assistant) {
+              const assistant = await this.personService.findOne(sender.assistantId);
+              if (!assistant) {
+                throw new Error(`Assistant with ID ${sender.assistantId} not found`);
+              }
+              sender.assistant = assistant;
+            }
 
-          phoneNumber = sender.assistant.phoneNumber || "";
-          if (!phoneNumber) {
+            phoneNumber = sender.assistant.phoneNumber || "";
+            if (!phoneNumber) {
+              throw new Error(
+                `Assistant ${sender.assistant.firstName} ${sender.assistant.lastName} has no phone number`
+              );
+            }
+            toName = `${sender.assistant.firstName} ${sender.assistant.lastName}`;
+            type = "assistant";
+            message = this.replaceTemplatePlaceholders(event.assistantSmsTemplate, {
+              assistant: sender.assistant,
+              sender,
+              receiver,
+            });
+          } else {
             throw new Error(
-              `Assistant ${sender.assistant.firstName} ${sender.assistant.lastName} has no phone number`
+              `Person ${sender.firstName} ${sender.lastName} has no phone number and no assistant`
             );
           }
-          toName = `${sender.assistant.firstName} ${sender.assistant.lastName}`;
-          type = "assistant";
-          message = this.replaceTemplatePlaceholders(event.assistantSmsTemplate, {
-            assistant: `${sender.assistant.firstName} ${sender.assistant.lastName}`,
-            sender: `${sender.firstName} ${sender.lastName}`,
-            receiver: `${receiver.firstName} ${receiver.lastName}`,
-          });
-        } else {
-          throw new Error(
-            `Person ${sender.firstName} ${sender.lastName} has no phone number and no assistant`
-          );
-        }
 
         messages.push({
           to: phoneNumber,
@@ -262,12 +262,51 @@ export class SmsService {
 
   /**
    * Replace template placeholders with actual values
+   * Supports both simple placeholders like {sender} and object properties like {sender.firstName}
    */
-  private replaceTemplatePlaceholders(template: string, values: Record<string, string>): string {
+  private replaceTemplatePlaceholders(
+    template: string,
+    values: Record<string, Person | string>
+  ): string {
     let message = template;
+
+    // First, replace object property placeholders like {sender.firstName}, {receiver.slug}
+    // Pattern: {objectName.propertyName}
+    message = message.replace(/\{(\w+)\.(\w+)\}/g, (match, objectName, propertyName) => {
+      const obj = values[objectName];
+      if (obj && typeof obj === "object") {
+        const person = obj as Person;
+        // Support firstName, lastName, slug
+        if (propertyName === "firstName") {
+          return person.firstName || "";
+        }
+        if (propertyName === "lastName") {
+          return person.lastName || "";
+        }
+        if (propertyName === "slug") {
+          return person.slug || "";
+        }
+        // Fallback: try to access the property directly
+        return (person as any)[propertyName] || match;
+      }
+      return match; // Return original if not found
+    });
+
+    // Then, replace simple placeholders like {sender}, {receiver}, {assistant}
+    // These will use the full name as fallback for backward compatibility
     for (const [key, value] of Object.entries(values)) {
-      message = message.replace(new RegExp(`\\{${key}\\}`, "g"), value);
+      if (typeof value === "object") {
+        const person = value as Person;
+        // Replace {key} with full name for backward compatibility
+        message = message.replace(
+          new RegExp(`\\{${key}\\}`, "g"),
+          `${person.firstName} ${person.lastName}`
+        );
+      } else {
+        message = message.replace(new RegExp(`\\{${key}\\}`, "g"), value);
+      }
     }
+
     return message;
   }
 }

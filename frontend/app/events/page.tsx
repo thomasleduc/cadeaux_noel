@@ -451,7 +451,7 @@ export default function EventsPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px]"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Available placeholders: {"{sender}"}, {"{receiver}"}.
+                  Available placeholders: {"{sender}"}, {"{sender.firstName}"}, {"{sender.lastName}"}, {"{sender.slug}"}, {"{receiver}"}, {"{receiver.firstName}"}, {"{receiver.lastName}"}, {"{receiver.slug}"}.
                 </p>
               </div>
 
@@ -471,8 +471,7 @@ export default function EventsPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px]"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Available placeholders: {"{assistant}"}, {"{sender}"},{" "}
-                  {"{receiver}"}.
+                  Available placeholders: {"{assistant}"}, {"{assistant.firstName}"}, {"{assistant.lastName}"}, {"{assistant.slug}"}, {"{sender}"}, {"{sender.firstName}"}, {"{sender.lastName}"}, {"{sender.slug}"}, {"{receiver}"}, {"{receiver.firstName}"}, {"{receiver.lastName}"}, {"{receiver.slug}"}.
                 </p>
               </div>
 
@@ -611,7 +610,7 @@ export default function EventsPage() {
                         )}
                       </div>
                       <p className="text-xs text-gray-500 mt-1">
-                        Available placeholders: {"{sender}"}, {"{receiver}"}.
+                        Available placeholders: {"{sender}"}, {"{sender.firstName}"}, {"{sender.lastName}"}, {"{sender.slug}"}, {"{receiver}"}, {"{receiver.firstName}"}, {"{receiver.lastName}"}, {"{receiver.slug}"}.
                         Press Ctrl+Enter to save, Esc to cancel.
                       </p>
                     </div>
@@ -672,8 +671,7 @@ export default function EventsPage() {
                         )}
                       </div>
                       <p className="text-xs text-gray-500 mt-1">
-                        Available placeholders: {"{assistant}"}, {"{sender}"},{" "}
-                        {"{receiver}"}. Press Ctrl+Enter to save, Esc to cancel.
+                        Available placeholders: {"{assistant}"}, {"{assistant.firstName}"}, {"{assistant.lastName}"}, {"{assistant.slug}"}, {"{sender}"}, {"{sender.firstName}"}, {"{sender.lastName}"}, {"{sender.slug}"}, {"{receiver}"}, {"{receiver.firstName}"}, {"{receiver.lastName}"}, {"{receiver.slug}"}. Press Ctrl+Enter to save, Esc to cancel.
                       </p>
                     </div>
                   </div>
