@@ -108,6 +108,12 @@ const DRY_RUN_SMS = gql`
   }
 `;
 
+const RESEND_EVENT_SMS = gql`
+  mutation ResendEventSms($eventId: ID!) {
+    resendEventSms(eventId: $eventId)
+  }
+`;
+
 const ADD_PERSON_TO_EVENT = gql`
   mutation AddPersonToEvent($eventId: ID!, $personId: ID!) {
     addPersonToEvent(eventId: $eventId, personId: $personId) {
@@ -190,6 +196,14 @@ export default function EventsPage() {
   });
 
   const [dryRunSms] = useMutation(DRY_RUN_SMS);
+
+  const [resendSms] = useMutation(RESEND_EVENT_SMS, {
+    onCompleted: () => {
+      refetch();
+      setActionState({ type: null });
+    },
+    onError: () => setActionState({ type: null }),
+  });
   const [addPersonToEventMutation] = useMutation(ADD_PERSON_TO_EVENT);
   const [removePersonFromEventMutation] = useMutation(REMOVE_PERSON_FROM_EVENT);
   const [updateEventMutation] = useMutation(UPDATE_EVENT);
@@ -201,7 +215,14 @@ export default function EventsPage() {
     assistantSmsTemplate: DEFAULT_ASSISTANT_TEMPLATE,
   });
   const [actionState, setActionState] = useState<{
-    type: "ready" | "generate" | "complete" | "toggle" | "dryRun" | null;
+    type:
+      | "ready"
+      | "generate"
+      | "complete"
+      | "toggle"
+      | "dryRun"
+      | "resend"
+      | null;
     eventId?: string;
     personId?: string;
   }>({ type: null });
@@ -290,6 +311,13 @@ export default function EventsPage() {
     } finally {
       setActionState({ type: null });
     }
+  };
+
+  const handleResendSms = (eventId: string) => {
+    setActionState({ type: "resend", eventId });
+    resendSms({
+      variables: { eventId },
+    });
   };
 
   const handleToggleParticipant = async (
@@ -451,7 +479,10 @@ export default function EventsPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px]"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Available placeholders: {"{sender}"}, {"{sender.firstName}"}, {"{sender.lastName}"}, {"{sender.slug}"}, {"{receiver}"}, {"{receiver.firstName}"}, {"{receiver.lastName}"}, {"{receiver.slug}"}.
+                  Available placeholders: {"{sender}"}, {"{sender.firstName}"},{" "}
+                  {"{sender.lastName}"}, {"{sender.slug}"}, {"{receiver}"},{" "}
+                  {"{receiver.firstName}"}, {"{receiver.lastName}"},{" "}
+                  {"{receiver.slug}"}.
                 </p>
               </div>
 
@@ -471,7 +502,12 @@ export default function EventsPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px]"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Available placeholders: {"{assistant}"}, {"{assistant.firstName}"}, {"{assistant.lastName}"}, {"{assistant.slug}"}, {"{sender}"}, {"{sender.firstName}"}, {"{sender.lastName}"}, {"{sender.slug}"}, {"{receiver}"}, {"{receiver.firstName}"}, {"{receiver.lastName}"}, {"{receiver.slug}"}.
+                  Available placeholders: {"{assistant}"},{" "}
+                  {"{assistant.firstName}"}, {"{assistant.lastName}"},{" "}
+                  {"{assistant.slug}"}, {"{sender}"}, {"{sender.firstName}"},{" "}
+                  {"{sender.lastName}"}, {"{sender.slug}"}, {"{receiver}"},{" "}
+                  {"{receiver.firstName}"}, {"{receiver.lastName}"},{" "}
+                  {"{receiver.slug}"}.
                 </p>
               </div>
 
@@ -502,19 +538,27 @@ export default function EventsPage() {
                 actionState.type === "complete" &&
                 actionState.eventId === event.id;
               const isToggling =
-                actionState.type === "toggle" && actionState.eventId === event.id;
-              const togglingPersonId = isToggling ? actionState.personId : undefined;
+                actionState.type === "toggle" &&
+                actionState.eventId === event.id;
+              const togglingPersonId = isToggling
+                ? actionState.personId
+                : undefined;
               const participantIds = new Set(
                 (event.participants || []).map((participant) => participant.id)
               );
               const availablePersons =
-                data?.persons?.filter((person) => !participantIds.has(person.id)) ?? [];
+                data?.persons?.filter(
+                  (person) => !participantIds.has(person.id)
+                ) ?? [];
               const canMarkReady = (event.participants?.length ?? 0) >= 2;
 
               const getStatusBadge = (status: EventStatus | null) => {
                 // Normalize status to lowercase (GraphQL returns uppercase enum values)
                 const rawStatus = status || "DRAFT";
-                const effectiveStatus = typeof rawStatus === "string" ? rawStatus.toLowerCase() : "draft";
+                const effectiveStatus =
+                  typeof rawStatus === "string"
+                    ? rawStatus.toLowerCase()
+                    : "draft";
                 const badges = {
                   draft: "bg-gray-100 text-gray-800",
                   ready: "bg-blue-100 text-blue-800",
@@ -610,8 +654,12 @@ export default function EventsPage() {
                         )}
                       </div>
                       <p className="text-xs text-gray-500 mt-1">
-                        Available placeholders: {"{sender}"}, {"{sender.firstName}"}, {"{sender.lastName}"}, {"{sender.slug}"}, {"{receiver}"}, {"{receiver.firstName}"}, {"{receiver.lastName}"}, {"{receiver.slug}"}.
-                        Press Ctrl+Enter to save, Esc to cancel.
+                        Available placeholders: {"{sender}"},{" "}
+                        {"{sender.firstName}"}, {"{sender.lastName}"},{" "}
+                        {"{sender.slug}"}, {"{receiver}"},{" "}
+                        {"{receiver.firstName}"}, {"{receiver.lastName}"},{" "}
+                        {"{receiver.slug}"}. Press Ctrl+Enter to save, Esc to
+                        cancel.
                       </p>
                     </div>
                     <div>
@@ -671,7 +719,14 @@ export default function EventsPage() {
                         )}
                       </div>
                       <p className="text-xs text-gray-500 mt-1">
-                        Available placeholders: {"{assistant}"}, {"{assistant.firstName}"}, {"{assistant.lastName}"}, {"{assistant.slug}"}, {"{sender}"}, {"{sender.firstName}"}, {"{sender.lastName}"}, {"{sender.slug}"}, {"{receiver}"}, {"{receiver.firstName}"}, {"{receiver.lastName}"}, {"{receiver.slug}"}. Press Ctrl+Enter to save, Esc to cancel.
+                        Available placeholders: {"{assistant}"},{" "}
+                        {"{assistant.firstName}"}, {"{assistant.lastName}"},{" "}
+                        {"{assistant.slug}"}, {"{sender}"},{" "}
+                        {"{sender.firstName}"}, {"{sender.lastName}"},{" "}
+                        {"{sender.slug}"}, {"{receiver}"},{" "}
+                        {"{receiver.firstName}"}, {"{receiver.lastName}"},{" "}
+                        {"{receiver.slug}"}. Press Ctrl+Enter to save, Esc to
+                        cancel.
                       </p>
                     </div>
                   </div>
@@ -759,13 +814,14 @@ export default function EventsPage() {
                       </div>
                     ) : (
                       <p className="text-sm text-gray-500">
-                        No people available. Add people first from the People page.
+                        No people available. Add people first from the People
+                        page.
                       </p>
                     )}
 
                     <p className="text-xs text-gray-500 mt-2">
-                      Checking a person adds them to this event&apos;s draw pool.
-                      Unchecking removes them.
+                      Checking a person adds them to this event&apos;s draw
+                      pool. Unchecking removes them.
                     </p>
                   </div>
 
@@ -801,8 +857,11 @@ export default function EventsPage() {
                     {(() => {
                       // Normalize status to lowercase (GraphQL returns uppercase enum values)
                       const rawStatus = event.status || "DRAFT";
-                      const currentStatus = typeof rawStatus === "string" ? rawStatus.toLowerCase() : "draft";
-                      
+                      const currentStatus =
+                        typeof rawStatus === "string"
+                          ? rawStatus.toLowerCase()
+                          : "draft";
+
                       if (currentStatus === "draft") {
                         return (
                           <>
@@ -811,11 +870,14 @@ export default function EventsPage() {
                               className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
                               disabled={isMarkingReady || !canMarkReady}
                             >
-                              {isMarkingReady ? "Marking as ready..." : "Mark as Ready"}
+                              {isMarkingReady
+                                ? "Marking as ready..."
+                                : "Mark as Ready"}
                             </button>
                             {!canMarkReady && (
                               <p className="text-sm text-gray-500">
-                                Need at least two participants to mark event as ready.
+                                Need at least two participants to mark event as
+                                ready.
                               </p>
                             )}
                           </>
@@ -828,7 +890,9 @@ export default function EventsPage() {
                             className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-60"
                             disabled={isGenerating}
                           >
-                            {isGenerating ? "Generating draw..." : "Generate Draw"}
+                            {isGenerating
+                              ? "Generating draw..."
+                              : "Generate Draw"}
                           </button>
                         );
                       }
@@ -843,30 +907,48 @@ export default function EventsPage() {
                               className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-60"
                               disabled={isGenerating}
                             >
-                              {isGenerating ? "Regenerating draw..." : "Regenerate Draw"}
+                              {isGenerating
+                                ? "Regenerating draw..."
+                                : "Regenerate Draw"}
                             </button>
                             <button
                               onClick={() => handleDryRunSms(event.id)}
                               className="bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 transition-colors disabled:opacity-60"
                               disabled={isDryRunning}
                             >
-                              {isDryRunning ? "Running dry-run..." : "Dry-run SMS"}
+                              {isDryRunning
+                                ? "Running dry-run..."
+                                : "Dry-run SMS"}
                             </button>
                             <button
                               onClick={() => handleMarkAsCompleted(event.id)}
                               className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-60"
                               disabled={isCompleting}
                             >
-                              {isCompleting ? "Completing..." : "Mark as Completed (Send SMS)"}
+                              {isCompleting
+                                ? "Completing..."
+                                : "Mark as Completed (Send SMS)"}
                             </button>
                           </>
                         );
                       }
                       if (currentStatus === "completed") {
+                        const isResending =
+                          actionState.type === "resend" &&
+                          actionState.eventId === event.id;
                         return (
-                          <p className="text-sm text-green-600 font-medium">
-                            ✓ Event completed - SMS have been sent
-                          </p>
+                          <div className="flex flex-wrap gap-3 items-center">
+                            <p className="text-sm text-green-600 font-medium">
+                              ✓ Event completed - SMS have been sent
+                            </p>
+                            <button
+                              onClick={() => handleResendSms(event.id)}
+                              className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-60"
+                              disabled={isResending}
+                            >
+                              {isResending ? "Resending SMS..." : "Resend SMS"}
+                            </button>
+                          </div>
                         );
                       }
                       // Fallback - should never happen but just in case
@@ -878,7 +960,9 @@ export default function EventsPage() {
                             className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60 mt-2"
                             disabled={isMarkingReady || !canMarkReady}
                           >
-                            {isMarkingReady ? "Marking as ready..." : "Mark as Ready"}
+                            {isMarkingReady
+                              ? "Marking as ready..."
+                              : "Mark as Ready"}
                           </button>
                         </div>
                       );
@@ -946,13 +1030,18 @@ export default function EventsPage() {
                             To: {msg.toName} ({msg.to})
                           </div>
                           <div className="text-xs text-gray-600 mb-2">
-                            Type: {msg.type === "assistant" ? "Assistant SMS" : "Regular SMS"}
+                            Type:{" "}
+                            {msg.type === "assistant"
+                              ? "Assistant SMS"
+                              : "Regular SMS"}
                           </div>
                           <div className="text-sm text-gray-700 mb-1">
-                            <span className="font-medium">Sender:</span> {msg.sender}
+                            <span className="font-medium">Sender:</span>{" "}
+                            {msg.sender}
                           </div>
                           <div className="text-sm text-gray-700 mb-2">
-                            <span className="font-medium">Receiver:</span> {msg.receiver}
+                            <span className="font-medium">Receiver:</span>{" "}
+                            {msg.receiver}
                           </div>
                           {msg.error && (
                             <div className="text-sm text-red-600 font-medium mb-2">
@@ -962,7 +1051,9 @@ export default function EventsPage() {
                         </div>
                       </div>
                       <div className="mt-3 pt-3 border-t border-gray-200">
-                        <div className="text-xs text-gray-500 mb-1">Message:</div>
+                        <div className="text-xs text-gray-500 mb-1">
+                          Message:
+                        </div>
                         <pre className="text-sm text-gray-800 whitespace-pre-wrap bg-white p-2 rounded border">
                           {msg.message || "(No message - error occurred)"}
                         </pre>
@@ -987,4 +1078,3 @@ export default function EventsPage() {
     </div>
   );
 }
-

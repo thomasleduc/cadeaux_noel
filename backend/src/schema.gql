@@ -71,6 +71,7 @@ type Mutation {
   removeFamily(id: ID!): Boolean!
   removePerson(id: ID!): Boolean!
   removePersonFromEvent(eventId: ID!, personId: ID!): Event!
+  resendEventSms(eventId: ID!): String!
   sendEventSms(eventId: ID!): String!
   updateEvent(input: UpdateEventInput!): Event!
   updateFamily(input: UpdateFamilyInput!): Family!

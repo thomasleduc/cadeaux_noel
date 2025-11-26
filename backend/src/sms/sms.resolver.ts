@@ -1,4 +1,11 @@
-import { Resolver, Mutation, Args, ID, ObjectType, Field } from "@nestjs/graphql";
+import {
+  Resolver,
+  Mutation,
+  Args,
+  ID,
+  ObjectType,
+  Field,
+} from "@nestjs/graphql";
 import { SmsService } from "./sms.service";
 
 @ObjectType()
@@ -56,9 +63,14 @@ export class SmsResolver {
     return `SMS sent: ${result.success} successful, ${result.failed} failed`;
   }
 
+  @Mutation(() => String)
+  async resendEventSms(@Args("eventId", { type: () => ID }) eventId: string) {
+    const result = await this.smsService.sendEventSms(eventId, true);
+    return `SMS resent: ${result.success} successful, ${result.failed} failed`;
+  }
+
   @Mutation(() => SmsDryRunResult)
   async dryRunSms(@Args("eventId", { type: () => ID }) eventId: string) {
     return this.smsService.dryRunSms(eventId);
   }
 }
-

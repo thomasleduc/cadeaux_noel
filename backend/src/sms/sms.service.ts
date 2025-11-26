@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Inject, forwardRef } from "@nestjs/common";
 import { Vonage } from "@vonage/server-sdk";
 import { PersonService } from "../person/person.service";
 import { EventService } from "../event/event.service";
@@ -11,6 +11,7 @@ export class SmsService {
 
   constructor(
     private personService: PersonService,
+    @Inject(forwardRef(() => EventService))
     private eventService: EventService
   ) {
     this.vonage = new Vonage({
@@ -21,9 +22,11 @@ export class SmsService {
 
   /**
    * Send SMS for all participants in an event
+   * Can be called for DRAWN or COMPLETED events (to resend)
    */
   async sendEventSms(
-    eventId: string
+    eventId: string,
+    allowResend: boolean = false
   ): Promise<{ success: number; failed: number }> {
     const event = await this.eventService.findOne(eventId);
     if (!event) {
@@ -38,9 +41,14 @@ export class SmsService {
     const currentStatus =
       event.status ||
       (event.drawResult ? EventStatus.DRAWN : EventStatus.DRAFT);
-    if (currentStatus !== EventStatus.DRAWN) {
+
+    // Allow sending SMS for DRAWN status, or COMPLETED if resend is allowed
+    if (
+      currentStatus !== EventStatus.DRAWN &&
+      !(allowResend && currentStatus === EventStatus.COMPLETED)
+    ) {
       throw new Error(
-        `Event must be in DRAWN status to send SMS. Current status: ${currentStatus}`
+        `Event must be in DRAWN status to send SMS, or COMPLETED if resending. Current status: ${currentStatus}`
       );
     }
 
@@ -71,12 +79,52 @@ export class SmsService {
       }
     }
 
-    // Mark event as completed after sending SMS
-    if (success > 0) {
-      await this.eventService.markAsCompleted(eventId);
-    }
+    // Note: markAsCompleted is now called from EventService.markAsCompleted
+    // to avoid circular dependency. The status update happens there.
 
     return { success, failed };
+  }
+
+  /**
+   * Validate and format phone number for Vonage
+   * - Removes leading + (Vonage doesn't accept it)
+   * - Validates that it has exactly 11 digits
+   * @returns Formatted phone number (without +) or throws error if invalid
+   */
+  private validateAndFormatPhoneNumber(
+    phoneNumber: string,
+    personName?: string
+  ): string {
+    if (!phoneNumber) {
+      throw new Error(
+        personName
+          ? `${personName} has no phone number`
+          : "Phone number is required"
+      );
+    }
+
+    // Remove leading + and any spaces
+    const formatted = phoneNumber.replace(/^\+/, "").replace(/\s/g, "");
+
+    // Check if it contains only digits
+    if (!/^\d+$/.test(formatted)) {
+      throw new Error(
+        personName
+          ? `${personName} has invalid phone number format: ${phoneNumber} (must contain only digits after removing +)`
+          : `Invalid phone number format: ${phoneNumber} (must contain only digits after removing +)`
+      );
+    }
+
+    // Check length (should be 11 digits for French numbers)
+    if (formatted.length !== 11) {
+      throw new Error(
+        personName
+          ? `${personName} has invalid phone number length: ${formatted.length} digits (expected 11). Original: ${phoneNumber}`
+          : `Invalid phone number length: ${formatted.length} digits (expected 11). Original: ${phoneNumber}`
+      );
+    }
+
+    return formatted;
   }
 
   /**
@@ -92,7 +140,10 @@ export class SmsService {
 
     // If sender has a phone number, use regular template
     if (sender.phoneNumber) {
-      phoneNumber = sender.phoneNumber;
+      phoneNumber = this.validateAndFormatPhoneNumber(
+        sender.phoneNumber,
+        `${sender.firstName} ${sender.lastName}`
+      );
       message = this.replaceTemplatePlaceholders(event.smsTemplate, {
         sender,
         receiver,
@@ -109,12 +160,16 @@ export class SmsService {
         sender.assistant = assistant;
       }
 
-      phoneNumber = sender.assistant.phoneNumber || "";
-      if (!phoneNumber) {
+      if (!sender.assistant.phoneNumber) {
         throw new Error(
           `Assistant ${sender.assistant.firstName} ${sender.assistant.lastName} has no phone number`
         );
       }
+
+      phoneNumber = this.validateAndFormatPhoneNumber(
+        sender.assistant.phoneNumber,
+        `Assistant ${sender.assistant.firstName} ${sender.assistant.lastName}`
+      );
       message = this.replaceTemplatePlaceholders(event.assistantSmsTemplate, {
         assistant: sender.assistant,
         sender,
@@ -128,11 +183,24 @@ export class SmsService {
 
     // Send SMS via Vonage
     const from = process.env.VONAGE_FROM_NUMBER || "SecretSanta";
-    const response = await this.vonage.sms.send({
+
+    // Detect if message contains Unicode characters (accents, special chars)
+    // If so, use 'unicode' type, otherwise use 'text' (default)
+    // Check for any character outside basic ASCII range (32-126 are printable ASCII)
+    const hasUnicode = /[^\x20-\x7E]/.test(message);
+
+    const smsParams: any = {
       to: phoneNumber,
       from,
       text: message,
-    });
+    };
+
+    // Add type: 'unicode' if message contains non-ASCII characters
+    if (hasUnicode) {
+      smsParams.type = "unicode";
+    }
+
+    const response = await this.vonage.sms.send(smsParams);
 
     if (response.messages[0].status !== "0") {
       throw new Error(`SMS failed: ${response.messages[0]["error-text"]}`);
@@ -205,7 +273,10 @@ export class SmsService {
 
         // If sender has a phone number, use regular template
         if (sender.phoneNumber) {
-          phoneNumber = sender.phoneNumber;
+          phoneNumber = this.validateAndFormatPhoneNumber(
+            sender.phoneNumber,
+            `${sender.firstName} ${sender.lastName}`
+          );
           toName = `${sender.firstName} ${sender.lastName}`;
           type = "regular";
           message = this.replaceTemplatePlaceholders(event.smsTemplate, {
@@ -228,12 +299,16 @@ export class SmsService {
             sender.assistant = assistant;
           }
 
-          phoneNumber = sender.assistant.phoneNumber || "";
-          if (!phoneNumber) {
+          if (!sender.assistant.phoneNumber) {
             throw new Error(
               `Assistant ${sender.assistant.firstName} ${sender.assistant.lastName} has no phone number`
             );
           }
+
+          phoneNumber = this.validateAndFormatPhoneNumber(
+            sender.assistant.phoneNumber,
+            `Assistant ${sender.assistant.firstName} ${sender.assistant.lastName}`
+          );
           toName = `${sender.assistant.firstName} ${sender.assistant.lastName}`;
           type = "assistant";
           message = this.replaceTemplatePlaceholders(
@@ -251,7 +326,7 @@ export class SmsService {
         }
 
         messages.push({
-          to: phoneNumber,
+          to: phoneNumber, // Formatted number without +
           toName,
           sender: `${sender.firstName} ${sender.lastName}`,
           receiver: `${receiver.firstName} ${receiver.lastName}`,

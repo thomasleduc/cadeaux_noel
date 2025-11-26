@@ -1,8 +1,9 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Inject, forwardRef } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { Event, CreateEventInput, UpdateEventInput, EventStatus } from "./event.entity";
 import { PersonService } from "../person/person.service";
+import { SmsService } from "../sms/sms.service";
 
 const EVENT_RELATIONS: string[] = [
   "participants",
@@ -15,7 +16,9 @@ export class EventService {
   constructor(
     @InjectRepository(Event)
     private eventRepository: Repository<Event>,
-    private personService: PersonService
+    private personService: PersonService,
+    @Inject(forwardRef(() => SmsService))
+    private smsService: SmsService
   ) {}
 
   async create(createEventInput: CreateEventInput): Promise<Event> {
