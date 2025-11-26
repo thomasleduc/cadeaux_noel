@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation } from "@apollo/client/react";
 import { gql } from "@apollo/client";
 import Link from "next/link";
@@ -106,6 +106,8 @@ export default function PeoplePage() {
     slug: "",
     phoneNumber: "",
   });
+  const [familyFilter, setFamilyFilter] = useState<string>("all");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
   const resetForm = () => {
     setFormData({
@@ -129,6 +131,33 @@ export default function PeoplePage() {
       },
     });
   };
+
+  const filteredPeople = useMemo(() => {
+    const personsList = data?.persons ?? [];
+    const filtered =
+      familyFilter === "all"
+        ? personsList
+        : personsList.filter((person) => {
+            if (familyFilter === "no-family") {
+              return !person.family;
+            }
+            return person.family?.id === familyFilter;
+          });
+
+    return [...filtered].sort((a, b) => {
+      if (!a.family && !b.family) {
+        return 0;
+      }
+      if (!a.family) {
+        return 1;
+      }
+      if (!b.family) {
+        return -1;
+      }
+      const compareValue = a.family.name.localeCompare(b.family.name);
+      return sortOrder === "asc" ? compareValue : -compareValue;
+    });
+  }, [data?.persons, familyFilter, sortOrder]);
 
   if (loading) return <p>Loading...</p>;
   if (error) return <p>Error: {error.message}</p>;
@@ -226,13 +255,42 @@ export default function PeoplePage() {
         )}
 
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="px-6 py-3 border-b border-gray-200">
+          <div className="px-6 py-3 border-b border-gray-200 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <p className="text-sm text-gray-600">
               Total people:{" "}
               <span className="font-medium text-gray-900">
-                {data?.persons?.length ?? 0}
+                {filteredPeople.length}
               </span>
             </p>
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-600">Family:</label>
+                <select
+                  value={familyFilter}
+                  onChange={(e) => setFamilyFilter(e.target.value)}
+                  className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">All families</option>
+                  <option value="no-family">No family</option>
+                  {data?.families?.map((family) => (
+                    <option key={family.id} value={family.id}>
+                      {family.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-600">Sort:</label>
+                <button
+                  onClick={() =>
+                    setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))
+                  }
+                  className="border border-gray-300 rounded-md px-3 py-1 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  {sortOrder === "asc" ? "Family (A → Z)" : "Family (Z → A)"}
+                </button>
+              </div>
+            </div>
           </div>
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -255,7 +313,7 @@ export default function PeoplePage() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {data?.persons?.map((person) => (
+              {filteredPeople.map((person) => (
                 <tr key={person.id}>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">
