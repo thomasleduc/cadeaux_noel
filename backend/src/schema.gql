@@ -31,13 +31,18 @@ type Event {
   createdAt: DateTime!
   drawResult: JSONObject
   id: ID!
-  isActive: Boolean!
-  isConfirmed: Boolean!
-  isDryRun: Boolean!
   name: String!
   participants: [Person!]
   smsTemplate: String!
+  status: EventStatus
   updatedAt: DateTime!
+}
+
+enum EventStatus {
+  COMPLETED
+  DRAFT
+  DRAWN
+  READY
 }
 
 type Family {
@@ -55,11 +60,12 @@ scalar JSONObject
 
 type Mutation {
   addPersonToEvent(eventId: ID!, personId: ID!): Event!
-  confirmDraw(eventId: ID!): Event!
   createEvent(input: CreateEventInput!): Event!
   createFamily(input: CreateFamilyInput!): Family!
   createPerson(input: CreatePersonInput!): Person!
-  generateDraw(eventId: ID!, isDryRun: Boolean = true): Event!
+  generateDraw(eventId: ID!): Event!
+  markEventAsCompleted(eventId: ID!): Event!
+  markEventAsReady(eventId: ID!): Event!
   removeEvent(id: ID!): Boolean!
   removeFamily(id: ID!): Boolean!
   removePerson(id: ID!): Boolean!
@@ -97,7 +103,6 @@ type Query {
 input UpdateEventInput {
   assistantSmsTemplate: String
   id: ID!
-  isActive: Boolean
   name: String
   smsTemplate: String
 }

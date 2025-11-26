@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
-import { Event, CreateEventInput, UpdateEventInput } from "./event.entity";
+import { Event, CreateEventInput, UpdateEventInput, EventStatus } from "./event.entity";
 import { PersonService } from "../person/person.service";
 
 const EVENT_RELATIONS: string[] = [
@@ -21,6 +21,7 @@ export class EventService {
   async create(createEventInput: CreateEventInput): Promise<Event> {
     const event = this.eventRepository.create({
       ...createEventInput,
+      status: EventStatus.DRAFT,
       smsTemplate:
         createEventInput.smsTemplate ||
         "Hello {sender}, this is Santa Claus. This year you should give a gift to {receiver}",
@@ -32,26 +33,50 @@ export class EventService {
   }
 
   async findAll(): Promise<Event[]> {
-    return this.eventRepository.find({
+    const events = await this.eventRepository.find({
       relations: EVENT_RELATIONS,
     });
+    // Migrate old events without status to DRAFT
+    for (const event of events) {
+      if (!event.status) {
+        event.status = EventStatus.DRAFT;
+        await this.eventRepository.save(event);
+      }
+    }
+    return events;
   }
 
   async findOne(id: string): Promise<Event | null> {
-    return this.eventRepository.findOne({
+    const event = await this.eventRepository.findOne({
       where: { id },
       relations: EVENT_RELATIONS,
     });
+    // Migrate old events without status to DRAFT
+    if (event && !event.status) {
+      event.status = EventStatus.DRAFT;
+      await this.eventRepository.save(event);
+    }
+    return event;
   }
 
   async update(updateEventInput: UpdateEventInput): Promise<Event> {
     const { id, ...updateData } = updateEventInput;
-    await this.eventRepository.update(id, updateData);
     const event = await this.findOne(id);
     if (!event) {
       throw new Error(`Event with ID ${id} not found`);
     }
-    return event;
+
+    // If updating templates or name, reset to draft if not already draft
+    if (updateData.smsTemplate || updateData.assistantSmsTemplate || updateData.name) {
+      const currentStatus = event.status || EventStatus.DRAFT;
+      if (currentStatus !== EventStatus.DRAFT) {
+        event.status = EventStatus.DRAFT;
+        event.drawResult = null; // Clear draw result when editing
+      }
+    }
+
+    Object.assign(event, updateData);
+    return this.eventRepository.save(event);
   }
 
   async remove(id: string): Promise<boolean> {
@@ -75,7 +100,11 @@ export class EventService {
     if (!alreadyAdded) {
       event.participants.push(person);
       event.drawResult = null;
-      event.isConfirmed = false;
+      // Reset to draft when participants change
+      const currentStatus = event.status || EventStatus.DRAFT;
+      if (currentStatus !== EventStatus.DRAFT) {
+        event.status = EventStatus.DRAFT;
+      }
     }
 
     return this.eventRepository.save(event);
@@ -92,20 +121,54 @@ export class EventService {
 
     if ((event.participants?.length ?? 0) !== originalLength) {
       event.drawResult = null;
-      event.isConfirmed = false;
+      // Reset to draft when participants change
+      const currentStatus = event.status || EventStatus.DRAFT;
+      if (currentStatus !== EventStatus.DRAFT) {
+        event.status = EventStatus.DRAFT;
+      }
     }
 
     return this.eventRepository.save(event);
   }
 
   /**
-   * Generate a secret santa draw ensuring people in the same family don't get each other
+   * Mark event as ready (confirmed for draw)
    */
-  async generateDraw(eventId: string, isDryRun: boolean = true): Promise<Event> {
+  async markAsReady(eventId: string): Promise<Event> {
     const event = await this.findOne(eventId);
     if (!event) {
       throw new Error(`Event with ID ${eventId} not found`);
     }
+
+    // Handle old events without status
+    const currentStatus = event.status || EventStatus.DRAFT;
+    if (currentStatus !== EventStatus.DRAFT) {
+      throw new Error(`Event must be in DRAFT status to be marked as READY. Current status: ${currentStatus}`);
+    }
+
+    if (!event.participants || event.participants.length < 2) {
+      throw new Error("Need at least 2 participants to mark event as ready.");
+    }
+
+    event.status = EventStatus.READY;
+    return this.eventRepository.save(event);
+  }
+
+  /**
+   * Generate a secret santa draw ensuring people in the same family don't get each other
+   */
+  async generateDraw(eventId: string): Promise<Event> {
+    const event = await this.findOne(eventId);
+    if (!event) {
+      throw new Error(`Event with ID ${eventId} not found`);
+    }
+
+    // Handle old events without status
+    const currentStatus = event.status || EventStatus.DRAFT;
+    if (currentStatus !== EventStatus.READY) {
+      throw new Error(`Event must be in READY status to generate a draw. Current status: ${currentStatus}`);
+    }
+
     const persons = event.participants || [];
 
     if (persons.length < 2) {
@@ -143,7 +206,7 @@ export class EventService {
           break;
         }
 
-        // Can't give to someone in the same family
+        // Can't give to someone in the same family (exclusion rule)
         if (sender.familyId && receiver.familyId && sender.familyId === receiver.familyId) {
           isValid = false;
           break;
@@ -161,29 +224,33 @@ export class EventService {
       throw new Error("Could not generate a valid draw. Try again or check family constraints.");
     }
 
-    // Update event with draw result
+    // Update event with draw result and set status to DRAWN
     event.drawResult = drawResult;
-    event.isDryRun = isDryRun;
-    event.isConfirmed = false;
+    event.status = EventStatus.DRAWN;
 
     return this.eventRepository.save(event);
   }
 
-  async confirmDraw(eventId: string): Promise<Event> {
+  /**
+   * Mark event as completed (SMS sent)
+   */
+  async markAsCompleted(eventId: string): Promise<Event> {
     const event = await this.findOne(eventId);
     if (!event) {
       throw new Error(`Event with ID ${eventId} not found`);
+    }
+
+    // Handle old events without status
+    const currentStatus = event.status || EventStatus.DRAFT;
+    if (currentStatus !== EventStatus.DRAWN) {
+      throw new Error(`Event must be in DRAWN status to be marked as COMPLETED. Current status: ${currentStatus}`);
     }
 
     if (!event.drawResult) {
       throw new Error("No draw result found. Please generate a draw first.");
     }
 
-    if (event.isConfirmed) {
-      throw new Error("Draw is already confirmed.");
-    }
-
-    event.isConfirmed = true;
+    event.status = EventStatus.COMPLETED;
     return this.eventRepository.save(event);
   }
 }

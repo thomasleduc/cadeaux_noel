@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { Vonage } from "@vonage/server-sdk";
 import { PersonService } from "../person/person.service";
 import { EventService } from "../event/event.service";
-import { Event } from "../event/event.entity";
+import { Event, EventStatus } from "../event/event.entity";
 import { Person } from "../person/person.entity";
 
 @Injectable()
@@ -32,8 +32,10 @@ export class SmsService {
       throw new Error("No draw result found. Please generate a draw first.");
     }
 
-    if (!event.isConfirmed) {
-      throw new Error("Event is not confirmed. Please confirm the draw first.");
+    // Handle old events without status - if they have a drawResult, consider them as DRAWN
+    const currentStatus = event.status || (event.drawResult ? EventStatus.DRAWN : EventStatus.DRAFT);
+    if (currentStatus !== EventStatus.DRAWN) {
+      throw new Error(`Event must be in DRAWN status to send SMS. Current status: ${currentStatus}`);
     }
 
     const persons = await this.personService.findAll();
@@ -58,6 +60,11 @@ export class SmsService {
         console.error(`Failed to send SMS to ${sender.firstName} ${sender.lastName}:`, error);
         failed++;
       }
+    }
+
+    // Mark event as completed after sending SMS
+    if (success > 0) {
+      await this.eventService.markAsCompleted(eventId);
     }
 
     return { success, failed };

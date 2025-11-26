@@ -7,9 +7,20 @@ import {
   ManyToMany,
   JoinTable,
 } from "typeorm";
-import { ObjectType, Field, ID, InputType } from "@nestjs/graphql";
+import { ObjectType, Field, ID, InputType, registerEnumType } from "@nestjs/graphql";
 import { GraphQLJSONObject } from "graphql-type-json";
 import { Person } from "../person/person.entity";
+
+export enum EventStatus {
+  DRAFT = "draft",
+  READY = "ready",
+  DRAWN = "drawn",
+  COMPLETED = "completed",
+}
+
+registerEnumType(EventStatus, {
+  name: "EventStatus",
+});
 
 @ObjectType()
 @Entity("events")
@@ -22,21 +33,18 @@ export class Event {
   @Column()
   name: string;
 
-  @Field()
-  @Column({ default: false })
-  isActive: boolean;
+  @Field(() => EventStatus, { nullable: true })
+  @Column({
+    type: "enum",
+    enum: EventStatus,
+    default: EventStatus.DRAFT,
+    nullable: true,
+  })
+  status: EventStatus | null;
 
   @Field(() => GraphQLJSONObject, { nullable: true })
   @Column("jsonb", { nullable: true })
   drawResult: Record<string, string> | null; // Map of senderId -> receiverId
-
-  @Field()
-  @Column({ default: false })
-  isConfirmed: boolean; // Whether SMS have been sent
-
-  @Field()
-  @Column({ default: false })
-  isDryRun: boolean; // Whether this is a test run
 
   @Field()
   @Column({ type: "text" })
@@ -90,7 +98,5 @@ export class UpdateEventInput {
   @Field({ nullable: true })
   assistantSmsTemplate?: string;
 
-  @Field({ nullable: true })
-  isActive?: boolean;
 }
 

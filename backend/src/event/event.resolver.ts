@@ -32,17 +32,18 @@ export class EventResolver {
   }
 
   @Mutation(() => Event)
-  async generateDraw(
-    @Args("eventId", { type: () => ID }) eventId: string,
-    @Args("isDryRun", { type: () => Boolean, nullable: true, defaultValue: true })
-    isDryRun: boolean
-  ) {
-    return this.eventService.generateDraw(eventId, isDryRun);
+  async markEventAsReady(@Args("eventId", { type: () => ID }) eventId: string) {
+    return this.eventService.markAsReady(eventId);
   }
 
   @Mutation(() => Event)
-  async confirmDraw(@Args("eventId", { type: () => ID }) eventId: string) {
-    return this.eventService.confirmDraw(eventId);
+  async generateDraw(@Args("eventId", { type: () => ID }) eventId: string) {
+    return this.eventService.generateDraw(eventId);
+  }
+
+  @Mutation(() => Event)
+  async markEventAsCompleted(@Args("eventId", { type: () => ID }) eventId: string) {
+    return this.eventService.markAsCompleted(eventId);
   }
 
   @Mutation(() => Event)

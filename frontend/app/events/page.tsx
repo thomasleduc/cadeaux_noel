@@ -11,14 +11,15 @@ type PersonSummary = {
   lastName: string;
 };
 
+type EventStatus = "draft" | "ready" | "drawn" | "completed";
+
 type EventRow = {
   id: string;
   name: string;
   smsTemplate: string;
   assistantSmsTemplate: string;
   drawResult: Record<string, string> | null;
-  isDryRun: boolean;
-  isConfirmed: boolean;
+  status: EventStatus | null;
   createdAt: string;
   updatedAt: string;
   participants: PersonSummary[];
@@ -32,8 +33,7 @@ const GET_EVENTS_AND_PERSONS = gql`
       smsTemplate
       assistantSmsTemplate
       drawResult
-      isDryRun
-      isConfirmed
+      status
       createdAt
       updatedAt
       participants {
@@ -59,22 +59,30 @@ const CREATE_EVENT = gql`
   }
 `;
 
-const GENERATE_DRAW = gql`
-  mutation GenerateDraw($eventId: ID!, $isDryRun: Boolean) {
-    generateDraw(eventId: $eventId, isDryRun: $isDryRun) {
+const MARK_EVENT_AS_READY = gql`
+  mutation MarkEventAsReady($eventId: ID!) {
+    markEventAsReady(eventId: $eventId) {
       id
-      drawResult
-      isDryRun
-      isConfirmed
+      status
     }
   }
 `;
 
-const CONFIRM_DRAW = gql`
-  mutation ConfirmDraw($eventId: ID!) {
-    confirmDraw(eventId: $eventId) {
+const GENERATE_DRAW = gql`
+  mutation GenerateDraw($eventId: ID!) {
+    generateDraw(eventId: $eventId) {
       id
-      isConfirmed
+      drawResult
+      status
+    }
+  }
+`;
+
+const MARK_EVENT_AS_COMPLETED = gql`
+  mutation MarkEventAsCompleted($eventId: ID!) {
+    markEventAsCompleted(eventId: $eventId) {
+      id
+      status
     }
   }
 `;
@@ -112,6 +120,7 @@ const UPDATE_EVENT = gql`
       name
       smsTemplate
       assistantSmsTemplate
+      status
     }
   }
 `;
@@ -135,6 +144,14 @@ export default function EventsPage() {
     },
   });
 
+  const [markAsReady] = useMutation(MARK_EVENT_AS_READY, {
+    onCompleted: () => {
+      refetch();
+      setActionState({ type: null });
+    },
+    onError: () => setActionState({ type: null }),
+  });
+
   const [generateDraw] = useMutation(GENERATE_DRAW, {
     onCompleted: () => {
       refetch();
@@ -143,7 +160,7 @@ export default function EventsPage() {
     onError: () => setActionState({ type: null }),
   });
 
-  const [confirmDraw] = useMutation(CONFIRM_DRAW, {
+  const [markAsCompleted] = useMutation(MARK_EVENT_AS_COMPLETED, {
     onCompleted: () => {
       refetch();
       setActionState({ type: null });
@@ -161,7 +178,7 @@ export default function EventsPage() {
     assistantSmsTemplate: DEFAULT_ASSISTANT_TEMPLATE,
   });
   const [actionState, setActionState] = useState<{
-    type: "generate" | "confirm" | "toggle" | null;
+    type: "ready" | "generate" | "complete" | "toggle" | null;
     eventId?: string;
     personId?: string;
   }>({ type: null });
@@ -195,16 +212,23 @@ export default function EventsPage() {
     });
   };
 
-  const handleGenerate = (eventId: string, isDryRun: boolean) => {
-    setActionState({ type: "generate", eventId });
-    generateDraw({
-      variables: { eventId, isDryRun },
+  const handleMarkAsReady = (eventId: string) => {
+    setActionState({ type: "ready", eventId });
+    markAsReady({
+      variables: { eventId },
     });
   };
 
-  const handleConfirm = (eventId: string) => {
-    setActionState({ type: "confirm", eventId });
-    confirmDraw({
+  const handleGenerate = (eventId: string) => {
+    setActionState({ type: "generate", eventId });
+    generateDraw({
+      variables: { eventId },
+    });
+  };
+
+  const handleMarkAsCompleted = (eventId: string) => {
+    setActionState({ type: "complete", eventId });
+    markAsCompleted({
       variables: { eventId },
     });
   };
@@ -410,11 +434,14 @@ export default function EventsPage() {
         ) : (
           <div className="space-y-6">
             {data?.events?.map((event) => {
+              const isMarkingReady =
+                actionState.type === "ready" &&
+                actionState.eventId === event.id;
               const isGenerating =
                 actionState.type === "generate" &&
                 actionState.eventId === event.id;
-              const isConfirming =
-                actionState.type === "confirm" &&
+              const isCompleting =
+                actionState.type === "complete" &&
                 actionState.eventId === event.id;
               const isToggling =
                 actionState.type === "toggle" && actionState.eventId === event.id;
@@ -424,7 +451,32 @@ export default function EventsPage() {
               );
               const availablePersons =
                 data?.persons?.filter((person) => !participantIds.has(person.id)) ?? [];
-              const canDraw = (event.participants?.length ?? 0) >= 2;
+              const canMarkReady = (event.participants?.length ?? 0) >= 2;
+
+              const getStatusBadge = (status: EventStatus | null) => {
+                // Normalize status to lowercase (GraphQL returns uppercase enum values)
+                const rawStatus = status || "DRAFT";
+                const effectiveStatus = typeof rawStatus === "string" ? rawStatus.toLowerCase() : "draft";
+                const badges = {
+                  draft: "bg-gray-100 text-gray-800",
+                  ready: "bg-blue-100 text-blue-800",
+                  drawn: "bg-purple-100 text-purple-800",
+                  completed: "bg-green-100 text-green-800",
+                };
+                const labels = {
+                  draft: "Draft",
+                  ready: "Ready",
+                  drawn: "Drawn",
+                  completed: "Completed",
+                };
+                return (
+                  <span
+                    className={`px-3 py-1 rounded-full text-sm font-medium ${badges[effectiveStatus]}`}
+                  >
+                    {labels[effectiveStatus]}
+                  </span>
+                );
+              };
 
               return (
                 <div key={event.id} className="bg-white rounded-lg shadow p-6">
@@ -437,25 +489,8 @@ export default function EventsPage() {
                         Created {new Date(event.createdAt).toLocaleString()}
                       </p>
                     </div>
-                    <div className="flex flex-wrap gap-2 text-sm">
-                      <span
-                        className={`px-3 py-1 rounded-full ${
-                          event.isDryRun
-                            ? "bg-yellow-100 text-yellow-800"
-                            : "bg-green-100 text-green-800"
-                        }`}
-                      >
-                        {event.isDryRun ? "Last draw: dry-run" : "Final draw"}
-                      </span>
-                      <span
-                        className={`px-3 py-1 rounded-full ${
-                          event.isConfirmed
-                            ? "bg-green-100 text-green-800"
-                            : "bg-gray-100 text-gray-600"
-                        }`}
-                      >
-                        {event.isConfirmed ? "Confirmed" : "Not confirmed"}
-                      </span>
+                    <div className="flex flex-wrap gap-2 items-center">
+                      {getStatusBadge(event.status)}
                     </div>
                   </div>
 
@@ -705,33 +740,74 @@ export default function EventsPage() {
                     )}
                   </div>
 
-                  <div className="mt-6 flex flex-wrap gap-3">
-                    <button
-                      onClick={() => handleGenerate(event.id, true)}
-                      className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-60"
-                      disabled={isGenerating || !canDraw}
-                    >
-                      {isGenerating ? "Generating..." : "Dry-run draw"}
-                    </button>
-                    <button
-                      onClick={() => handleGenerate(event.id, false)}
-                      className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-60"
-                      disabled={isGenerating || !canDraw}
-                    >
-                      {isGenerating ? "Generating..." : "Final draw"}
-                    </button>
-                    <button
-                      onClick={() => handleConfirm(event.id)}
-                      className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-60"
-                      disabled={isConfirming || !event.drawResult || event.isConfirmed}
-                    >
-                      {isConfirming ? "Confirming..." : "Confirm draw"}
-                    </button>
-                    {!canDraw && (
-                      <p className="text-sm text-gray-500 mt-2">
-                        Need at least two participants to run a draw.
-                      </p>
-                    )}
+                  <div className="mt-6 flex flex-wrap gap-3 items-center">
+                    {(() => {
+                      // Normalize status to lowercase (GraphQL returns uppercase enum values)
+                      const rawStatus = event.status || "DRAFT";
+                      const currentStatus = typeof rawStatus === "string" ? rawStatus.toLowerCase() : "draft";
+                      console.log("Event status (raw):", rawStatus, "normalized:", currentStatus, "canMarkReady:", canMarkReady, "participants:", event.participants?.length);
+                      
+                      if (currentStatus === "draft") {
+                        return (
+                          <>
+                            <button
+                              onClick={() => handleMarkAsReady(event.id)}
+                              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
+                              disabled={isMarkingReady || !canMarkReady}
+                            >
+                              {isMarkingReady ? "Marking as ready..." : "Mark as Ready"}
+                            </button>
+                            {!canMarkReady && (
+                              <p className="text-sm text-gray-500">
+                                Need at least two participants to mark event as ready.
+                              </p>
+                            )}
+                          </>
+                        );
+                      }
+                      if (currentStatus === "ready") {
+                        return (
+                          <button
+                            onClick={() => handleGenerate(event.id)}
+                            className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-60"
+                            disabled={isGenerating}
+                          >
+                            {isGenerating ? "Generating draw..." : "Generate Draw"}
+                          </button>
+                        );
+                      }
+                      if (currentStatus === "drawn") {
+                        return (
+                          <button
+                            onClick={() => handleMarkAsCompleted(event.id)}
+                            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-60"
+                            disabled={isCompleting}
+                          >
+                            {isCompleting ? "Completing..." : "Mark as Completed (Send SMS)"}
+                          </button>
+                        );
+                      }
+                      if (currentStatus === "completed") {
+                        return (
+                          <p className="text-sm text-green-600 font-medium">
+                            ✓ Event completed - SMS have been sent
+                          </p>
+                        );
+                      }
+                      // Fallback - should never happen but just in case
+                      return (
+                        <div className="text-sm text-gray-500">
+                          <p>Status: {currentStatus || "unknown"}</p>
+                          <button
+                            onClick={() => handleMarkAsReady(event.id)}
+                            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60 mt-2"
+                            disabled={isMarkingReady || !canMarkReady}
+                          >
+                            {isMarkingReady ? "Marking as ready..." : "Mark as Ready"}
+                          </button>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               );
