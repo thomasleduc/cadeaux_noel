@@ -1,0 +1,20 @@
+{
+  "name": "secret-santa",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Secret Santa SMS Dashboard",
+  "scripts": {
+    "dev:backend": "cd backend && yarn start:dev",
+    "dev:frontend": "cd frontend && yarn dev",
+    "install:all": "yarn install && cd backend && yarn install && cd ../frontend && yarn install",
+    "build:backend": "cd backend && yarn build",
+    "build:frontend": "cd frontend && yarn build"
+  },
+  "keywords": [
+    "secret-santa",
+    "sms",
+    "dashboard"
+  ],
+  "author": "",
+  "license": "UNLICENSED"
+}

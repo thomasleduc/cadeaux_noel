@@ -1,0 +1,118 @@
+# ------------------------------------------------------
+# THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+# ------------------------------------------------------
+
+input CreateEventInput {
+  assistantSmsTemplate: String
+  name: String!
+  smsTemplate: String
+}
+
+input CreateFamilyInput {
+  name: String!
+}
+
+input CreatePersonInput {
+  assistantId: ID
+  familyId: ID
+  firstName: String!
+  lastName: String!
+  phoneNumber: String
+  slug: String!
+}
+
+"""
+A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
+"""
+scalar DateTime
+
+type Event {
+  assistantSmsTemplate: String!
+  createdAt: DateTime!
+  drawResult: JSONObject
+  id: ID!
+  isActive: Boolean!
+  isConfirmed: Boolean!
+  isDryRun: Boolean!
+  name: String!
+  participants: [Person!]
+  smsTemplate: String!
+  updatedAt: DateTime!
+}
+
+type Family {
+  createdAt: DateTime!
+  id: ID!
+  members: [Person!]!
+  name: String!
+  updatedAt: DateTime!
+}
+
+"""
+The `JSONObject` scalar type represents JSON objects as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
+"""
+scalar JSONObject
+
+type Mutation {
+  addPersonToEvent(eventId: ID!, personId: ID!): Event!
+  confirmDraw(eventId: ID!): Event!
+  createEvent(input: CreateEventInput!): Event!
+  createFamily(input: CreateFamilyInput!): Family!
+  createPerson(input: CreatePersonInput!): Person!
+  generateDraw(eventId: ID!, isDryRun: Boolean = true): Event!
+  removeEvent(id: ID!): Boolean!
+  removeFamily(id: ID!): Boolean!
+  removePerson(id: ID!): Boolean!
+  removePersonFromEvent(eventId: ID!, personId: ID!): Event!
+  sendEventSms(eventId: ID!): String!
+  updateEvent(input: UpdateEventInput!): Event!
+  updateFamily(input: UpdateFamilyInput!): Family!
+  updatePerson(input: UpdatePersonInput!): Person!
+}
+
+type Person {
+  assistant: Person
+  assistantId: ID
+  createdAt: DateTime!
+  events: [Event!]
+  family: Family
+  familyId: ID
+  firstName: String!
+  id: ID!
+  lastName: String!
+  phoneNumber: String
+  slug: String!
+  updatedAt: DateTime!
+}
+
+type Query {
+  event(id: ID!): Event!
+  events: [Event!]!
+  families: [Family!]!
+  family(id: ID!): Family!
+  person(id: ID!): Person!
+  persons: [Person!]!
+}
+
+input UpdateEventInput {
+  assistantSmsTemplate: String
+  id: ID!
+  isActive: Boolean
+  name: String
+  smsTemplate: String
+}
+
+input UpdateFamilyInput {
+  id: ID!
+  name: String
+}
+
+input UpdatePersonInput {
+  assistantId: ID
+  familyId: ID
+  firstName: String
+  id: ID!
+  lastName: String
+  phoneNumber: String
+  slug: String
+}
