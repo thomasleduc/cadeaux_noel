@@ -778,13 +778,22 @@ export default function EventsPage() {
                       }
                       if (currentStatus === "drawn") {
                         return (
-                          <button
-                            onClick={() => handleMarkAsCompleted(event.id)}
-                            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-60"
-                            disabled={isCompleting}
-                          >
-                            {isCompleting ? "Completing..." : "Mark as Completed (Send SMS)"}
-                          </button>
+                          <>
+                            <button
+                              onClick={() => handleGenerate(event.id)}
+                              className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-60"
+                              disabled={isGenerating}
+                            >
+                              {isGenerating ? "Regenerating draw..." : "Regenerate Draw"}
+                            </button>
+                            <button
+                              onClick={() => handleMarkAsCompleted(event.id)}
+                              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-60"
+                              disabled={isCompleting}
+                            >
+                              {isCompleting ? "Completing..." : "Mark as Completed (Send SMS)"}
+                            </button>
+                          </>
                         );
                       }
                       if (currentStatus === "completed") {

@@ -165,8 +165,9 @@ export class EventService {
 
     // Handle old events without status
     const currentStatus = event.status || EventStatus.DRAFT;
-    if (currentStatus !== EventStatus.READY) {
-      throw new Error(`Event must be in READY status to generate a draw. Current status: ${currentStatus}`);
+    // Allow regenerating draw if status is READY or DRAWN
+    if (currentStatus !== EventStatus.READY && currentStatus !== EventStatus.DRAWN) {
+      throw new Error(`Event must be in READY or DRAWN status to generate a draw. Current status: ${currentStatus}`);
     }
 
     const persons = event.participants || [];
