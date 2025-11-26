@@ -27,6 +27,19 @@ type FamilyRow = {
   name: string;
 };
 
+type EditablePersonField = "firstName" | "lastName" | "phoneNumber";
+
+const PencilIcon = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 20 20"
+    fill="currentColor"
+    className="h-4 w-4"
+  >
+    <path d="M15.586 2.586a2 2 0 0 0-2.828 0L2 13.344V18h4.656L17.414 7.242a2 2 0 0 0 0-2.828l-1.828-1.828Zm-2.121.707 1.828 1.828-1 1-1.828-1.828 1-1Zm-2.414 2.414 1.828 1.828L6 14.586H4v-2l7.051-6.879Z" />
+  </svg>
+);
+
 const GET_PERSONS_AND_FAMILIES = gql`
   query GetPersonsAndFamilies {
     persons {
@@ -108,6 +121,11 @@ export default function PeoplePage() {
   });
   const [familyFilter, setFamilyFilter] = useState<string>("all");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [editingPersonField, setEditingPersonField] = useState<{
+    id: string;
+    field: EditablePersonField;
+  } | null>(null);
+  const [editingValue, setEditingValue] = useState("");
 
   const resetForm = () => {
     setFormData({
@@ -161,6 +179,101 @@ export default function PeoplePage() {
 
   if (loading) return <p>Loading...</p>;
   if (error) return <p>Error: {error.message}</p>;
+
+  const startEditingField = (person: PersonRow, field: EditablePersonField) => {
+    const currentValue =
+      field === "firstName"
+        ? person.firstName
+        : field === "lastName"
+          ? person.lastName
+          : (person.phoneNumber ?? "");
+    setEditingPersonField({ id: person.id, field });
+    setEditingValue(currentValue);
+  };
+
+  const cancelEditingField = () => {
+    setEditingPersonField(null);
+    setEditingValue("");
+  };
+
+  const saveEditingField = async () => {
+    if (!editingPersonField) return;
+    const value =
+      editingPersonField.field === "phoneNumber"
+        ? editingValue.trim()
+        : editingValue.trim();
+
+    if (editingPersonField.field !== "phoneNumber" && value.length === 0) {
+      cancelEditingField();
+      return;
+    }
+
+    await updatePerson({
+      variables: {
+        input: {
+          id: editingPersonField.id,
+          [editingPersonField.field]:
+            editingPersonField.field === "phoneNumber" ? value || null : value,
+        },
+      },
+    });
+    cancelEditingField();
+  };
+
+  const renderEditableCell = (
+    person: PersonRow,
+    field: EditablePersonField,
+    placeholder = "-"
+  ) => {
+    const isEditing =
+      editingPersonField?.id === person.id &&
+      editingPersonField.field === field;
+    const displayValue =
+      field === "firstName"
+        ? person.firstName
+        : field === "lastName"
+          ? person.lastName
+          : person.phoneNumber || placeholder;
+
+    if (isEditing) {
+      return (
+        <input
+          type={field === "phoneNumber" ? "tel" : "text"}
+          className="w-full border border-blue-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          value={editingValue}
+          autoFocus
+          onChange={(e) => setEditingValue(e.target.value)}
+          onBlur={saveEditingField}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              (e.currentTarget as HTMLInputElement).blur();
+            }
+            if (e.key === "Escape") {
+              e.preventDefault();
+              cancelEditingField();
+            }
+          }}
+        />
+      );
+    }
+
+    return (
+      <div className="group flex items-center gap-2">
+        <span className="text-sm text-gray-900">
+          {displayValue || placeholder}
+        </span>
+        <button
+          type="button"
+          aria-label="Edit field"
+          className="text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={() => startEditingField(person, field)}
+        >
+          <PencilIcon />
+        </button>
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -296,7 +409,10 @@ export default function PeoplePage() {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Name
+                  First Name
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Last Name
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Slug
@@ -316,17 +432,16 @@ export default function PeoplePage() {
               {filteredPeople.map((person) => (
                 <tr key={person.id}>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
-                      {person.firstName} {person.lastName}
-                    </div>
+                    {renderEditableCell(person, "firstName")}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {renderEditableCell(person, "lastName")}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-500">{person.slug}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-500">
-                      {person.phoneNumber || "-"}
-                    </div>
+                    {renderEditableCell(person, "phoneNumber")}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <select

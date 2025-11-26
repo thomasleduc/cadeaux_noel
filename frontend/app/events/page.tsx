@@ -214,6 +214,41 @@ export default function EventsPage() {
     }
   };
 
+  const handleSelectAll = async (eventId: string) => {
+    const event = data?.events?.find((e) => e.id === eventId);
+    if (!event || !data?.persons) return;
+
+    const participantIds = new Set(event.participants?.map((p) => p.id) ?? []);
+    const allPersons = data.persons;
+    const allSelected = allPersons.every((p) => participantIds.has(p.id));
+
+    setActionState({ type: "toggle", eventId });
+    try {
+      if (allSelected) {
+        // Deselect all
+        for (const person of allPersons) {
+          if (participantIds.has(person.id)) {
+            await removePersonFromEventMutation({
+              variables: { eventId, personId: person.id },
+            });
+          }
+        }
+      } else {
+        // Select all
+        for (const person of allPersons) {
+          if (!participantIds.has(person.id)) {
+            await addPersonToEventMutation({
+              variables: { eventId, personId: person.id },
+            });
+          }
+        }
+      }
+      await refetch();
+    } finally {
+      setActionState({ type: null });
+    }
+  };
+
   const getPersonName = (personId: string) => {
     const person = data?.persons?.find((p) => p.id === personId);
     return person ? `${person.firstName} ${person.lastName}` : personId;
@@ -408,7 +443,26 @@ export default function EventsPage() {
                           <thead className="bg-gray-50">
                             <tr>
                               <th className="px-4 py-2 text-left font-medium text-gray-500">
-                                Include
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                    checked={
+                                      data?.persons &&
+                                      data.persons.length > 0 &&
+                                      data.persons.every((p) =>
+                                        participantIds.has(p.id)
+                                      )
+                                    }
+                                    disabled={
+                                      isToggling &&
+                                      actionState.type === "toggle" &&
+                                      actionState.eventId === event.id
+                                    }
+                                    onChange={() => handleSelectAll(event.id)}
+                                  />
+                                  <span>Include</span>
+                                </div>
                               </th>
                               <th className="px-4 py-2 text-left font-medium text-gray-500">
                                 Person
