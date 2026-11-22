@@ -7,7 +7,13 @@ import {
   ManyToMany,
   JoinTable,
 } from "typeorm";
-import { ObjectType, Field, ID, InputType, registerEnumType } from "@nestjs/graphql";
+import {
+  ObjectType,
+  Field,
+  ID,
+  InputType,
+  registerEnumType,
+} from "@nestjs/graphql";
 import { GraphQLJSONObject } from "graphql-type-json";
 import { Person } from "../person/person.entity";
 
@@ -97,6 +103,4 @@ export class UpdateEventInput {
 
   @Field({ nullable: true })
   assistantSmsTemplate?: string;
-
 }
-

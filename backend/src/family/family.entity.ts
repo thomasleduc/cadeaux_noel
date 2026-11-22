@@ -47,4 +47,3 @@ export class UpdateFamilyInput {
   @Field({ nullable: true })
   name?: string;
 }
-

@@ -31,4 +31,3 @@ export class PersonResolver {
     return this.personService.remove(id);
   }
 }
-

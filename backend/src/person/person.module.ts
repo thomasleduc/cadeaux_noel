@@ -10,4 +10,3 @@ import { Person } from "./person.entity";
   exports: [PersonService],
 })
 export class PersonModule {}
-

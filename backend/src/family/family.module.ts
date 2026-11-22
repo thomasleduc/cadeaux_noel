@@ -10,4 +10,3 @@ import { Family } from "./family.entity";
   exports: [FamilyService],
 })
 export class FamilyModule {}
-

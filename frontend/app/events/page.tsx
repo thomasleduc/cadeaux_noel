@@ -87,6 +87,25 @@ const MARK_EVENT_AS_COMPLETED = gql`
   }
 `;
 
+type DryRunPayload = {
+  messages: Array<{
+    to: string;
+    toName: string;
+    sender: string;
+    receiver: string;
+    message: string;
+    type: string;
+    error?: string;
+  }>;
+  summary: {
+    total: number;
+    success: number;
+    failed: number;
+  };
+};
+
+type DryRunResult = DryRunPayload & { eventId: string };
+
 const DRY_RUN_SMS = gql`
   mutation DryRunSms($eventId: ID!) {
     dryRunSms(eventId: $eventId) {
@@ -195,7 +214,9 @@ export default function EventsPage() {
     onError: () => setActionState({ type: null }),
   });
 
-  const [dryRunSms] = useMutation(DRY_RUN_SMS);
+  const [dryRunSms] = useMutation<{ dryRunSms: DryRunPayload }>(
+    DRY_RUN_SMS
+  );
 
   const [resendSms] = useMutation(RESEND_EVENT_SMS, {
     onCompleted: () => {
@@ -231,23 +252,9 @@ export default function EventsPage() {
     field: "smsTemplate" | "assistantSmsTemplate";
   } | null>(null);
   const [editingTemplateValue, setEditingTemplateValue] = useState("");
-  const [dryRunResult, setDryRunResult] = useState<{
-    eventId: string;
-    messages: Array<{
-      to: string;
-      toName: string;
-      sender: string;
-      receiver: string;
-      message: string;
-      type: string;
-      error?: string;
-    }>;
-    summary: {
-      total: number;
-      success: number;
-      failed: number;
-    };
-  } | null>(null);
+  const [dryRunResult, setDryRunResult] = useState<DryRunResult | null>(
+    null
+  );
 
   const resetForm = () => {
     setFormData({
@@ -555,10 +562,11 @@ export default function EventsPage() {
               const getStatusBadge = (status: EventStatus | null) => {
                 // Normalize status to lowercase (GraphQL returns uppercase enum values)
                 const rawStatus = status || "DRAFT";
-                const effectiveStatus =
+                const effectiveStatus = (
                   typeof rawStatus === "string"
                     ? rawStatus.toLowerCase()
-                    : "draft";
+                    : "draft"
+                ) as EventStatus;
                 const badges = {
                   draft: "bg-gray-100 text-gray-800",
                   ready: "bg-blue-100 text-blue-800",

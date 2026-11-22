@@ -1,7 +1,12 @@
 import { Injectable, Inject, forwardRef } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
-import { Event, CreateEventInput, UpdateEventInput, EventStatus } from "./event.entity";
+import {
+  Event,
+  CreateEventInput,
+  UpdateEventInput,
+  EventStatus,
+} from "./event.entity";
 import { PersonService } from "../person/person.service";
 import { SmsService } from "../sms/sms.service";
 
@@ -70,7 +75,11 @@ export class EventService {
     }
 
     // If updating templates or name, reset to draft if not already draft
-    if (updateData.smsTemplate || updateData.assistantSmsTemplate || updateData.name) {
+    if (
+      updateData.smsTemplate ||
+      updateData.assistantSmsTemplate ||
+      updateData.name
+    ) {
       const currentStatus = event.status || EventStatus.DRAFT;
       if (currentStatus !== EventStatus.DRAFT) {
         event.status = EventStatus.DRAFT;
@@ -99,7 +108,9 @@ export class EventService {
     }
 
     event.participants = event.participants || [];
-    const alreadyAdded = event.participants.some((participant) => participant.id === person.id);
+    const alreadyAdded = event.participants.some(
+      (participant) => participant.id === person.id
+    );
     if (!alreadyAdded) {
       event.participants.push(person);
       event.drawResult = null;
@@ -120,7 +131,9 @@ export class EventService {
     }
 
     const originalLength = event.participants?.length ?? 0;
-    event.participants = (event.participants || []).filter((participant) => participant.id !== personId);
+    event.participants = (event.participants || []).filter(
+      (participant) => participant.id !== personId
+    );
 
     if ((event.participants?.length ?? 0) !== originalLength) {
       event.drawResult = null;
@@ -146,7 +159,9 @@ export class EventService {
     // Handle old events without status
     const currentStatus = event.status || EventStatus.DRAFT;
     if (currentStatus !== EventStatus.DRAFT) {
-      throw new Error(`Event must be in DRAFT status to be marked as READY. Current status: ${currentStatus}`);
+      throw new Error(
+        `Event must be in DRAFT status to be marked as READY. Current status: ${currentStatus}`
+      );
     }
 
     if (!event.participants || event.participants.length < 2) {
@@ -169,8 +184,13 @@ export class EventService {
     // Handle old events without status
     const currentStatus = event.status || EventStatus.DRAFT;
     // Allow regenerating draw if status is READY or DRAWN
-    if (currentStatus !== EventStatus.READY && currentStatus !== EventStatus.DRAWN) {
-      throw new Error(`Event must be in READY or DRAWN status to generate a draw. Current status: ${currentStatus}`);
+    if (
+      currentStatus !== EventStatus.READY &&
+      currentStatus !== EventStatus.DRAWN
+    ) {
+      throw new Error(
+        `Event must be in READY or DRAWN status to generate a draw. Current status: ${currentStatus}`
+      );
     }
 
     const persons = event.participants || [];
@@ -189,10 +209,11 @@ export class EventService {
       return shuffled;
     };
 
-    // Try to generate a valid draw (max 100 attempts)
+    // Rejection sampling keeps the draw uniformly random among valid ones.
+    // Unbalanced families (e.g. 5+3+2) reject most shuffles, hence many attempts.
     let drawResult: Record<string, string> | null = null;
     let attempts = 0;
-    const maxAttempts = 100;
+    const maxAttempts = 10000;
 
     while (!drawResult && attempts < maxAttempts) {
       attempts++;
@@ -202,7 +223,7 @@ export class EventService {
 
       for (let i = 0; i < persons.length; i++) {
         const sender = persons[i];
-        let receiver = shuffled[i];
+        const receiver = shuffled[i];
 
         // Can't give to yourself
         if (sender.id === receiver.id) {
@@ -211,7 +232,11 @@ export class EventService {
         }
 
         // Can't give to someone in the same family (exclusion rule)
-        if (sender.familyId && receiver.familyId && sender.familyId === receiver.familyId) {
+        if (
+          sender.familyId &&
+          receiver.familyId &&
+          sender.familyId === receiver.familyId
+        ) {
           isValid = false;
           break;
         }
@@ -225,7 +250,9 @@ export class EventService {
     }
 
     if (!drawResult) {
-      throw new Error("Could not generate a valid draw. Try again or check family constraints.");
+      throw new Error(
+        "Could not generate a valid draw. Try again or check family constraints."
+      );
     }
 
     // Update event with draw result and set status to DRAWN
@@ -247,7 +274,9 @@ export class EventService {
     // Handle old events without status
     const currentStatus = event.status || EventStatus.DRAFT;
     if (currentStatus !== EventStatus.DRAWN) {
-      throw new Error(`Event must be in DRAWN status to be marked as COMPLETED. Current status: ${currentStatus}`);
+      throw new Error(
+        `Event must be in DRAWN status to be marked as COMPLETED. Current status: ${currentStatus}`
+      );
     }
 
     if (!event.drawResult) {
@@ -258,4 +287,3 @@ export class EventService {
     return this.eventRepository.save(event);
   }
 }
-

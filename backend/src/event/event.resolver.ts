@@ -42,7 +42,9 @@ export class EventResolver {
   }
 
   @Mutation(() => Event)
-  async markEventAsCompleted(@Args("eventId", { type: () => ID }) eventId: string) {
+  async markEventAsCompleted(
+    @Args("eventId", { type: () => ID }) eventId: string
+  ) {
     return this.eventService.markAsCompleted(eventId);
   }
 
@@ -62,4 +64,3 @@ export class EventResolver {
     return this.eventService.removeParticipant(eventId, personId);
   }
 }
-

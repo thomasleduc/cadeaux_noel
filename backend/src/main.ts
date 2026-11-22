@@ -1,5 +1,10 @@
+import { config } from "dotenv";
+import { resolve } from "path";
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
+
+// Load .env file from backend directory
+config({ path: resolve(__dirname, "../.env") });
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);

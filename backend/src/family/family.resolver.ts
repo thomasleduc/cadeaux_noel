@@ -31,4 +31,3 @@ export class FamilyResolver {
     return this.familyService.remove(id);
   }
 }
-

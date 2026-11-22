@@ -30,6 +30,12 @@ const GET_FAMILIES = gql`
   }
 `;
 
+type FamilyRow = {
+  id: string;
+  name: string;
+  members: { id: string; firstName: string; lastName: string }[];
+};
+
 const CREATE_FAMILY = gql`
   mutation CreateFamily($input: CreateFamilyInput!) {
     createFamily(input: $input) {
@@ -49,7 +55,7 @@ const UPDATE_FAMILY = gql`
 `;
 
 export default function FamiliesPage() {
-  const { loading, error, data, refetch } = useQuery(GET_FAMILIES);
+  const { loading, error, data, refetch } = useQuery<{ families: FamilyRow[] }>(GET_FAMILIES);
   const [createFamily] = useMutation(CREATE_FAMILY, {
     onCompleted: () => {
       refetch();

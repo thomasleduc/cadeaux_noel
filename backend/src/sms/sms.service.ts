@@ -1,23 +1,75 @@
 import { Injectable, Inject, forwardRef } from "@nestjs/common";
-import { Vonage } from "@vonage/server-sdk";
 import { PersonService } from "../person/person.service";
 import { EventService } from "../event/event.service";
 import { Event, EventStatus } from "../event/event.entity";
 import { Person } from "../person/person.entity";
+import { SmsProvider } from "./sms-provider.interface";
+import { TwilioProvider } from "./providers/twilio.provider";
+import { SmsGatewayProvider } from "./providers/sms-gateway.provider";
 
 @Injectable()
 export class SmsService {
-  private vonage: Vonage;
+  private smsProvider: SmsProvider;
+  private providerName: string;
 
   constructor(
     private personService: PersonService,
     @Inject(forwardRef(() => EventService))
     private eventService: EventService
   ) {
-    this.vonage = new Vonage({
-      apiKey: process.env.VONAGE_API_KEY || "",
-      apiSecret: process.env.VONAGE_API_SECRET || "",
-    });
+    // Choose SMS provider based on environment variables
+    // Priority: SMS_GATEWAY_URL > TWILIO_ACCOUNT_SID > VONAGE_API_KEY (legacy)
+    if (process.env.SMS_GATEWAY_URL) {
+      this.smsProvider = new SmsGatewayProvider();
+      this.providerName = "SMS Gateway";
+      console.log("📱 Using SMS Gateway provider");
+    } else if (
+      process.env.TWILIO_ACCOUNT_SID &&
+      process.env.TWILIO_AUTH_TOKEN
+    ) {
+      this.smsProvider = new TwilioProvider();
+      this.providerName = "Twilio";
+      console.log("📱 Using Twilio provider");
+    } else {
+      // Fallback to Vonage for backward compatibility
+      const Vonage = require("@vonage/server-sdk").Vonage;
+      const apiKey = process.env.VONAGE_API_KEY;
+      const apiSecret = process.env.VONAGE_API_SECRET;
+
+      if (!apiKey || !apiSecret) {
+        console.warn("⚠️  No SMS provider configured. Set one of:");
+        console.warn("  - SMS_GATEWAY_URL (for Android SMS Gateway)");
+        console.warn("  - TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN (for Twilio)");
+        console.warn(
+          "  - VONAGE_API_KEY + VONAGE_API_SECRET (for Vonage - legacy)"
+        );
+      }
+
+      // Create a Vonage adapter
+      const vonage = new Vonage({
+        apiKey: apiKey || "",
+        apiSecret: apiSecret || "",
+      });
+
+      this.smsProvider = {
+        async sendSms(params) {
+          const response = await vonage.sms.send({
+            to: params.to,
+            from: params.from,
+            text: params.text,
+            ...(params.type === "unicode" && { type: "unicode" }),
+          });
+
+          if (response.messages[0].status !== "0") {
+            throw new Error(
+              `Vonage SMS failed: ${response.messages[0]["error-text"]}`
+            );
+          }
+        },
+      };
+      this.providerName = "Vonage (legacy)";
+      console.log("📱 Using Vonage provider (legacy)");
+    }
   }
 
   /**
@@ -71,25 +123,31 @@ export class SmsService {
         await this.sendSmsToPerson(sender, receiver, event);
         success++;
       } catch (error) {
+        // Additional context logging at the loop level
         console.error(
-          `Failed to send SMS to ${sender.firstName} ${sender.lastName}:`,
-          error
+          `[${this.providerName}] Failed to send SMS to ${sender.firstName} ${sender.lastName} (ID: ${sender.id}):`,
+          error instanceof Error ? error.message : String(error)
         );
+        console.error("Error details:", {
+          provider: this.providerName,
+          senderId: sender.id,
+          receiverId: receiver.id,
+          eventId: event.id,
+          errorType:
+            error instanceof Error ? error.constructor.name : typeof error,
+        });
         failed++;
       }
     }
-
-    // Note: markAsCompleted is now called from EventService.markAsCompleted
-    // to avoid circular dependency. The status update happens there.
 
     return { success, failed };
   }
 
   /**
-   * Validate and format phone number for Vonage
-   * - Removes leading + (Vonage doesn't accept it)
+   * Validate and format phone number
+   * - Removes leading + for providers that don't accept it
    * - Validates that it has exactly 11 digits
-   * @returns Formatted phone number (without +) or throws error if invalid
+   * @returns Formatted phone number or throws error if invalid
    */
   private validateAndFormatPhoneNumber(
     phoneNumber: string,
@@ -181,29 +239,49 @@ export class SmsService {
       );
     }
 
-    // Send SMS via Vonage
-    const from = process.env.VONAGE_FROM_NUMBER || "SecretSanta";
+    // Get from number based on provider
+    const from =
+      process.env.TWILIO_PHONE_NUMBER ||
+      process.env.VONAGE_FROM_NUMBER ||
+      "SecretSanta";
 
     // Detect if message contains Unicode characters (accents, special chars)
-    // If so, use 'unicode' type, otherwise use 'text' (default)
-    // Check for any character outside basic ASCII range (32-126 are printable ASCII)
     const hasUnicode = /[^\x20-\x7E]/.test(message);
 
-    const smsParams: any = {
-      to: phoneNumber,
-      from,
-      text: message,
-    };
-
-    // Add type: 'unicode' if message contains non-ASCII characters
-    if (hasUnicode) {
-      smsParams.type = "unicode";
-    }
-
-    const response = await this.vonage.sms.send(smsParams);
-
-    if (response.messages[0].status !== "0") {
-      throw new Error(`SMS failed: ${response.messages[0]["error-text"]}`);
+    try {
+      await this.smsProvider.sendSms({
+        to: phoneNumber,
+        from,
+        text: message,
+        type: hasUnicode ? "unicode" : "text",
+      });
+    } catch (error) {
+      // Log all relevant information when SMS fails
+      console.error(`=== ${this.providerName.toUpperCase()} SMS ERROR ===`);
+      console.error("Error:", error);
+      console.error("SMS Parameters:", {
+        to: phoneNumber,
+        from,
+        text: message.substring(0, 100) + (message.length > 100 ? "..." : ""),
+        textLength: message.length,
+        hasUnicode,
+      });
+      console.error("Sender Info:", {
+        id: sender.id,
+        name: `${sender.firstName} ${sender.lastName}`,
+        phoneNumber: sender.phoneNumber || "N/A",
+        assistantId: sender.assistantId || "N/A",
+      });
+      console.error("Receiver Info:", {
+        id: receiver.id,
+        name: `${receiver.firstName} ${receiver.lastName}`,
+      });
+      console.error("Event Info:", {
+        id: event.id,
+        name: event.name,
+      });
+      console.error(`=== END ${this.providerName.toUpperCase()} ERROR ===`);
+      throw error;
     }
   }
 
@@ -326,7 +404,7 @@ export class SmsService {
         }
 
         messages.push({
-          to: phoneNumber, // Formatted number without +
+          to: phoneNumber,
           toName,
           sender: `${sender.firstName} ${sender.lastName}`,
           receiver: `${receiver.firstName} ${receiver.lastName}`,
@@ -370,14 +448,12 @@ export class SmsService {
     let message = template;
 
     // First, replace object property placeholders like {sender.firstName}, {receiver.slug}
-    // Pattern: {objectName.propertyName}
     message = message.replace(
       /\{(\w+)\.(\w+)\}/g,
       (match, objectName, propertyName) => {
         const obj = values[objectName];
         if (obj && typeof obj === "object") {
           const person = obj;
-          // Support firstName, lastName, slug
           if (propertyName === "firstName") {
             return person.firstName || "";
           }
@@ -387,19 +463,16 @@ export class SmsService {
           if (propertyName === "slug") {
             return person.slug || "";
           }
-          // Fallback: try to access the property directly
           return (person as any)[propertyName] || match;
         }
-        return match; // Return original if not found
+        return match;
       }
     );
 
     // Then, replace simple placeholders like {sender}, {receiver}, {assistant}
-    // These will use the full name as fallback for backward compatibility
     for (const [key, value] of Object.entries(values)) {
       if (typeof value === "object") {
         const person = value;
-        // Replace {key} with full name for backward compatibility
         message = message.replace(
           new RegExp(`\\{${key}\\}`, "g"),
           `${person.firstName} ${person.lastName}`

@@ -43,4 +43,3 @@ export class PersonService {
     return (result.affected ?? 0) > 0;
   }
 }
-

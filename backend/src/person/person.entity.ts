@@ -110,4 +110,3 @@ export class UpdatePersonInput {
   @Field(() => ID, { nullable: true })
   familyId?: string;
 }
-

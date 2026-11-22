@@ -16,4 +16,3 @@ import { SmsModule } from "../sms/sms.module";
   exports: [EventService],
 })
 export class EventModule {}
-
